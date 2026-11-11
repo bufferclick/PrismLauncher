@@ -44,9 +44,9 @@
 
 namespace Ui {
 class LogPage;
-class MemoryUsageLabel;
 }
 class QTextCharFormat;
+class MemoryUsageLabel;
 
 class LogFormatProxyModel : public QIdentityProxyModel {
    public:
