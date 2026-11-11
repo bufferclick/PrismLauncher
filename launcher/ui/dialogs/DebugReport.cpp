@@ -118,12 +118,19 @@ QString DebugReport::collect()
         }
     } else {
 #if defined(Q_OS_WIN)
-        // wmic is deprecated but present on every Windows JL supports.
-        row(out, QStringLiteral("Total physical"),
-            humanBytes(run(QStringLiteral("wmic"), { "ComputerSystem", "get", "TotalPhysicalMemory", "/value" })
-                           .section('=', 1)
-                           .trimmed()
-                           .toLongLong()));
+        // wmic is deprecated; PowerShell is present on every Windows JL supports. wmic also
+        // returns "TotalPhysicalMemory=NNN" with a trailing CR that broke the old parse.
+        const auto raw = run(QStringLiteral("powershell"),
+                             { "-NoProfile", "-Command",
+                               "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory" },
+                             8000);
+        bool ok = false;
+        const qint64 bytes = raw.trimmed().toLongLong(&ok);
+        if (ok && bytes > 0) {
+            row(out, QStringLiteral("Total physical"), humanBytes(bytes));
+        } else {
+            row(out, QStringLiteral("Total physical"), QStringLiteral("could not be read (%1)").arg(raw.left(80)));
+        }
 #else
         row(out, QStringLiteral("Total physical"), QString());
 #endif
@@ -139,17 +146,27 @@ QString DebugReport::collect()
 #if defined(Q_OS_WIN)
     {
         // Adapter descriptions, driver versions and VRAM: the thing that decides whether
-        // Horizon (Vulkan) can even start on this machine.
-        const auto gpus = run(QStringLiteral("wmic"),
-                              { "path", "win32_VideoController", "get", "Name,DriverVersion,AdapterRAM", "/format:csv" });
-        for (const auto& line : gpus.split('\n')) {
-            if (line.trimmed().isEmpty() || line.startsWith(QStringLiteral("Node,")))
+        // Horizon (Vulkan) can even start on this machine. PowerShell returns one field per
+        // line, which avoids guessing at wmic's CSV column order.
+        const auto raw = run(QStringLiteral("powershell"),
+                             { "-NoProfile", "-Command",
+                               "Get-CimInstance Win32_VideoController | ForEach-Object { "
+                               "\"$($_.Name)|$($_.DriverVersion)|$($_.AdapterRAM)\" }" },
+                             8000);
+        bool any = false;
+        for (const auto& line : raw.split('\n')) {
+            const auto trimmed = line.trimmed();
+            if (trimmed.isEmpty())
                 continue;
-            const auto fields = line.split(',');
-            if (fields.size() >= 4)
-                out << QStringLiteral("GPU: %1 | driver %2 | VRAM %3")
-                           .arg(fields.at(1).trimmed(), fields.at(2).trimmed(), humanBytes(fields.at(3).trimmed().toLongLong()));
+            const auto parts = trimmed.split('|');
+            if (parts.size() < 3)
+                continue;
+            any = true;
+            out << QStringLiteral("GPU: %1 | driver %2 | VRAM %3")
+                       .arg(parts.at(0).trimmed(), parts.at(1).trimmed(), humanBytes(parts.at(2).trimmed().toLongLong()));
         }
+        if (!any)
+            out << QStringLiteral("(no adapter reported by Win32_VideoController)");
     }
 #endif
 
@@ -169,6 +186,8 @@ QString DebugReport::collect()
             out << QStringLiteral("  %1").arg(version.split('\n').first().trimmed());
     }
     row(out, QStringLiteral("JAVA_HOME"), qEnvironmentVariable("JAVA_HOME"));
+    // The launcher bundles/downloads its own Java, which is what instances actually use.
+    row(out, QStringLiteral("Launcher Java path"), APPLICATION->settings()->get("JavaPath").toString());
 
     // ---------------------------------------------------------------- accounts
     section(out, QStringLiteral("Accounts"));

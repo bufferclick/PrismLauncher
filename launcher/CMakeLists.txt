@@ -296,6 +296,10 @@ set(MINECRAFT_SOURCES
     minecraft/Library.cpp
     minecraft/Library.h
     minecraft/MojangDownloadInfo.h
+    minecraft/HorizonCreationTask.cpp
+    minecraft/HorizonCreationTask.h
+    minecraft/HorizonInstance.cpp
+    minecraft/HorizonInstance.h
     minecraft/VanillaInstanceCreationTask.cpp
     minecraft/VanillaInstanceCreationTask.h
     minecraft/VersionFile.cpp

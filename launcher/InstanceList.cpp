@@ -58,6 +58,7 @@
 
 #include "InstanceTask.h"
 #include "WatchLock.h"
+#include "minecraft/HorizonInstance.h"
 #include "minecraft/MinecraftInstance.h"
 #include "settings/INISettingsObject.h"
 
@@ -719,6 +720,15 @@ std::unique_ptr<MinecraftInstance> InstanceList::loadInstance(const InstanceId& 
     instanceSettings->registerSetting("InstanceType", "");
 
     const QString instType = instanceSettings->get("InstanceType").toString();
+
+    // Horizon instances are MinecraftInstance subclasses: same folder layout and pages, but
+    // they launch the native Rust client instead of a JVM.
+    if (instType == HorizonInstance::typeString()) {
+        auto inst = std::make_unique<HorizonInstance>(m_globalSettings, std::move(instanceSettings), instanceRoot);
+        qDebug() << "Loaded Horizon instance" << inst->name() << "from" << inst->instanceRoot();
+        return inst;
+    }
+
     if (!instType.isEmpty() && instType != "OneSix") {
         qDebug() << "Instance " << id << "has invalid type" << instType;
         return nullptr;
