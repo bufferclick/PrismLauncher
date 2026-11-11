@@ -210,6 +210,7 @@
     </property>
     <addaction name="actionClearMetadata"/>
     <addaction name="actionFabricVersions"/>
+    <addaction name="actionHorizon"/>
     <addaction name="actionReportBug"/>
     <addaction name="actionViewLog"/>
     <addaction name="actionAddToPATH"/>
@@ -626,6 +627,17 @@
    </property>
    <property name="toolTip">
     <string>Open %1 subreddit.</string>
+   </property>
+  </action>
+  <action name="actionHorizon">
+   <property name="icon">
+    <iconset theme="cat"/>
+   </property>
+   <property name="text">
+    <string>&amp;Horizon (Rust client)</string>
+   </property>
+   <property name="toolTip">
+    <string>Install and launch Horizon, the Rust reimplementation of Minecraft: Java Edition</string>
    </property>
   </action>
   <action name="actionFabricVersions">

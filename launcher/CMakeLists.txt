@@ -1030,6 +1030,12 @@ SET(LAUNCHER_SOURCES
 
     # GUI - dialogs
     ui/dialogs/AboutDialog.cpp
+    ui/dialogs/DebugModeDialog.cpp
+    ui/dialogs/DebugModeDialog.h
+    ui/dialogs/DebugReport.cpp
+    ui/dialogs/DebugReport.h
+    ui/dialogs/HorizonDialog.cpp
+    ui/dialogs/HorizonDialog.h
     ui/dialogs/AboutDialog.h
     ui/dialogs/ProfileSelectDialog.cpp
     ui/dialogs/ProfileSelectDialog.h

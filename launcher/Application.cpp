@@ -1249,6 +1249,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     if (!createSetupWizard()) {
         m_themeManager->applyCurrentlySelectedTheme(true);
     }
+    registerStartMenuEntry();
     performMainStartupAction();
 }
 
@@ -1375,6 +1376,38 @@ bool Application::event(QEvent* event)
     }
 
     return QApplication::event(event);
+}
+
+void Application::registerStartMenuEntry()
+{
+#if defined(Q_OS_WIN)
+    // Windows only: give JL a Start Menu entry the first time it runs so it can be found by
+    // typing "jl". A portable install that the user moved would otherwise be invisible to
+    // search, and the .exe alone never registers itself.
+    if (m_settings->get("StartMenuEntryCreated").toBool())
+        return;
+
+    const QString appDir = QCoreApplication::applicationDirPath();
+    // Only for portable/loose installs: an NSIS install already creates its own entry.
+    if (!QFileInfo::exists(FS::PathCombine(appDir, "portable.txt")))
+        return;
+
+    const QString destination = FS::PathCombine(FS::getApplicationsDir(), "JL.lnk");
+    if (QFileInfo::exists(destination)) {
+        m_settings->set("StartMenuEntryCreated", true);
+        return;
+    }
+
+    // createShortcut() appends the extension itself on Windows.
+    const QString target = FS::PathCombine(appDir, BuildConfig.LAUNCHER_APP_BINARY_NAME + QStringLiteral(".exe"));
+    const QString created = FS::createShortcut(destination, target, {}, QStringLiteral("JL"), QStringLiteral("JL"));
+    if (created.isEmpty()) {
+        qWarning() << "Could not create the Start Menu entry";
+        return;
+    }
+    m_settings->set("StartMenuEntryCreated", true);
+    qDebug() << "Created Start Menu entry at" << created;
+#endif
 }
 
 void Application::performMainStartupAction()

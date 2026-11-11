@@ -227,6 +227,9 @@ class Application : public QApplication {
     bool createSetupWizard();
     void performMainStartupAction();
 
+    /// \brief Create a Start Menu entry for portable Windows installs (first run only).
+    void registerStartMenuEntry();
+
     // sets the fatal error message and m_status to Failed.
     void showFatalErrorMessage(const QString& title, const QString& content);
 

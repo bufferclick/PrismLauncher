@@ -300,6 +300,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="supportHorizon">
+       <property name="text">
+        <string>Support Horizon</string>
+       </property>
+       <property name="toolTip">
+        <string>Horizon is a separate, independent project. Support its developers on GitHub.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="aboutQt">
        <property name="autoFillBackground">
         <bool>false</bool>
@@ -338,6 +348,7 @@
   <tabstop>creditsText</tabstop>
   <tabstop>licenseText</tabstop>
   <tabstop>viewInGithub</tabstop>
+  <tabstop>supportHorizon</tabstop>
   <tabstop>aboutQt</tabstop>
   <tabstop>closeButton</tabstop>
  </tabstops>
