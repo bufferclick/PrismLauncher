@@ -60,7 +60,30 @@ jobs:
         run: cmake --preset "$env:CMAKE_PRESET" -D VCPKG_HOST_TRIPLET=x64-windows -D VCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build
-        run: cmake --build --preset "$env:CMAKE_PRESET" --config Release
+        shell: pwsh
+        run: |
+          cmake --build --preset "$env:CMAKE_PRESET" --config Release 2>&1 | Tee-Object -FilePath build.log
+          exit $LASTEXITCODE
+
+      - name: Show build errors
+        if: failure()
+        shell: pwsh
+        run: |
+          $lines = Get-Content build.log -ErrorAction SilentlyContinue
+          if (-not $lines) { Write-Host "::error::build.log missing"; exit 0 }
+          $idx = 0..($lines.Count - 1) | Where-Object { $lines[$_] -match "error C|error LNK|FAILED:" }
+          $n = 0
+          foreach ($i in ($idx | Select-Object -First 8)) {
+            $chunk = ($lines[$i..([Math]::Min($i + 2, $lines.Count - 1))] -join " / ")
+            if ($chunk.Length -gt 900) { $chunk = $chunk.Substring(0, 900) }
+            Write-Host "::error::$chunk"
+            $n++
+          }
+          if ($n -eq 0) {
+            $tail = ($lines | Select-Object -Last 12) -join " / "
+            if ($tail.Length -gt 900) { $tail = $tail.Substring(0, 900) }
+            Write-Host "::error::no compiler error found; tail: $tail"
+          }
 
       - name: Collect portable build
         shell: pwsh

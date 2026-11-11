@@ -1132,6 +1132,8 @@ SET(LAUNCHER_SOURCES
     ui/widgets/SubTaskProgressBar.cpp
     ui/widgets/VersionListView.cpp
     ui/widgets/VersionListView.h
+    ui/widgets/MemoryUsageLabel.cpp
+    ui/widgets/MemoryUsageLabel.h
     ui/widgets/VersionSelectWidget.cpp
     ui/widgets/VersionSelectWidget.h
     ui/widgets/ProgressWidget.h

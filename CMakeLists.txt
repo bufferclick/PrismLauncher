@@ -186,7 +186,7 @@ set(Launcher_LEGACY_FMLLIBS_BASE_URL "https://files.prismlauncher.org/fmllibs/" 
 ######## Set version numbers ########
 set(Launcher_VERSION_MAJOR 0)
 set(Launcher_VERSION_MINOR 0)
-set(Launcher_VERSION_PATCH 1)
+set(Launcher_VERSION_PATCH 2)
 
 # Data folder of Prism Launcher. JL offers to import it on first start.
 set(Launcher_PrismDataFolder "PrismLauncher" CACHE STRING "Name of Prism Launcher's data folder, used for the first-run instance import.")
@@ -195,6 +195,11 @@ set(Launcher_PrismDataFolder "PrismLauncher" CACHE STRING "Name of Prism Launche
 set(Launcher_VERSION_SUFFIX "" CACHE STRING "Pre-release suffix appended to the launcher version (e.g. -beta).")
 
 set(Launcher_VERSION_NAME "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_PATCH}${Launcher_VERSION_SUFFIX}")
+# Tags are pushed as "v0.0.2" but the build string is "0.0.2". FlexVer compares text
+# sections before numeric ones, so "v0.0.2" sorts *below* "0.0.2" and the updater then
+# reports the release it just built as older than the copy already running. Tags are
+# normalised before comparison in the updater; this keeps the plain form available too.
+set(Launcher_VERSION_NAME_TAG "${Launcher_VERSION_NAME}")
 set(Launcher_VERSION_NAME4 "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_PATCH}.0")
 set(Launcher_VERSION_NAME4_COMMA "${Launcher_VERSION_MAJOR},${Launcher_VERSION_MINOR},${Launcher_VERSION_PATCH},0")
 
