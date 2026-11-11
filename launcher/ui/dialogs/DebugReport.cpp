@@ -177,7 +177,7 @@ QString DebugReport::collect()
         const auto account = accounts->at(i);
         // Never print tokens: only the type and display name.
         if (account)
-            out << QStringLiteral("Account: %1 (%2)").arg(account->profileName(), account->type());
+            out << QStringLiteral("Account: %1 (%2)").arg(account->profileName(), account->typeString());
     }
     if (accounts->count() == 0)
         out << QStringLiteral("(no accounts configured)");
@@ -240,7 +240,7 @@ QString DebugReport::collect()
     section(out, QStringLiteral("Settings that affect launch speed"));
     const auto settings = APPLICATION->settings();
     for (const auto& key : { "ConsoleMaxLines", "ShowGameTime", "CloseAfterLaunch", "AutoUpdateCheck", "UpdatesEnabled" }) {
-        if (auto* setting = settings->getSetting(key))
+        if (auto setting = settings->getSetting(key); setting)
             row(out, key, setting->get().toString());
     }
 

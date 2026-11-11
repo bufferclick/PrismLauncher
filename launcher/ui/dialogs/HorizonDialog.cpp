@@ -27,6 +27,7 @@
 #include <QVBoxLayout>
 
 #include "Application.h"
+#include "DesktopServices.h"
 #include "FileSystem.h"
 #include "net/NetJob.h"
 #include "net/Request.h"
