@@ -30,6 +30,7 @@
 
 #include "Application.h"
 #include "BuildConfig.h"
+#include "InstanceList.h"
 
 DebugModeDialog::DebugModeDialog(QWidget* parent) : QDialog(parent)
 {
@@ -122,7 +123,7 @@ void DebugModeDialog::runBenchmark()
     }
 
     // 3. Metadata cache: the JSON Prism reads before it can show versions.
-    QDir metaDir(QDir(APPLICATION->dataDir()).absoluteFilePath(QStringLiteral("meta")));
+    QDir metaDir(QDir(APPLICATION->dataRoot()).absoluteFilePath(QStringLiteral("meta")));
     timer.start();
     const auto metaFiles = metaDir.entryInfoList(QDir::Files);
     qint64 metaBytes = 0;

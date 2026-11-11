@@ -94,9 +94,9 @@ QString DebugReport::collect()
     row(out, QStringLiteral("Build artifact"), BuildConfig.BUILD_ARTIFACT);
     row(out, QStringLiteral("Build platform"), BuildConfig.BUILD_PLATFORM);
     row(out, QStringLiteral("Updater repo"), BuildConfig.UPDATER_GITHUB_REPO);
-    row(out, QStringLiteral("Data directory"), APPLICATION->dataDir());
+    row(out, QStringLiteral("Data directory"), APPLICATION->dataRoot());
     row(out, QStringLiteral("Binary"), QCoreApplication::applicationFilePath());
-    row(out, QStringLiteral("Portable"), QFileInfo::exists(FS::PathCombine(APPLICATION->dataDir(), "portable.txt")) ? "yes" : "no");
+    row(out, QStringLiteral("Portable"), QFileInfo::exists(FS::PathCombine(APPLICATION->dataRoot(), "portable.txt")) ? "yes" : "no");
 
     // ---------------------------------------------------------------- OS
     section(out, QStringLiteral("Operating system"));

@@ -81,7 +81,7 @@ bool assetMatchesPlatform(const QString& name)
 
 QString HorizonDialog::installDir()
 {
-    return FS::PathCombine(APPLICATION->dataDir(), QStringLiteral("horizon"));
+    return FS::PathCombine(APPLICATION->dataRoot(), QStringLiteral("horizon"));
 }
 
 HorizonDialog::HorizonDialog(QWidget* parent) : QDialog(parent)
