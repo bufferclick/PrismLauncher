@@ -42,12 +42,14 @@
 
 #include <QIdentityProxyModel>
 #include <QScrollBar>
+#include <QTimer>
 #include <QShortcut>
 
 #include "launch/LaunchTask.h"
 #include "settings/Setting.h"
 
 #include "ui/GuiUtil.h"
+#include "ui/widgets/MemoryUsageLabel.h"
 #include "ui/themes/ThemeManager.h"
 
 #include <BuildConfig.h>
@@ -147,6 +149,10 @@ LogPage::LogPage(BaseInstance* instance, QWidget* parent) : QWidget(parent), ui(
 
     ui->text->setModel(m_proxy);
 
+    // JL: live heap readout next to the log controls, in the spirit of the F3 "Memory:" line.
+    m_memory = new MemoryUsageLabel(this);
+    m_memory->setMaxMiB(maxHeapMiB());
+    ui->horizontalLayout->addWidget(m_memory);
     // set up instance and launch process recognition
     {
         auto launchTask = m_instance->getLaunchTask();
@@ -203,12 +209,35 @@ void LogPage::UIToModelState()
     m_model->suspend(ui->trackLogCheckbox->checkState() != Qt::Checked);
 }
 
+int LogPage::maxHeapMiB() const
+{
+    // Mirrors MinecraftInstance::createLaunchScript(), which emits -Xmx using max when
+    // min < max and min otherwise, so the readout matches the heap the game actually gets.
+    const int min = m_instance->settings()->get("MinMemAlloc").toInt();
+    const int max = m_instance->settings()->get("MaxMemAlloc").toInt();
+    return min < max ? max : min;
+}
+
 void LogPage::setInstanceLaunchTaskChanged(LaunchTask* proc, bool initial)
 {
     m_process = proc;
+
+    // Stop reading samples from the previous run.
+    if (m_memory) {
+        m_memory->reset();
+        m_memory->setMaxMiB(maxHeapMiB());
+    }
+    if (m_memory && m_model) {
+        disconnect(m_model.get(), &LogModel::rowsInserted, this, &LogPage::logLinesAppended);
+    }
+
     if (m_process) {
         m_model = proc->getLogModel();
         m_proxy->setSourceModel(m_model.get());
+
+        // "Memory: 512/2048 MB" lines are rare outside F3, so also fall back to the
+        // log model: every appended line is offered to the label.
+        connect(m_model.get(), &LogModel::rowsInserted, this, &LogPage::logLinesAppended, Qt::UniqueConnection);
         if (initial) {
             modelStateToUI();
         } else {
@@ -217,6 +246,18 @@ void LogPage::setInstanceLaunchTaskChanged(LaunchTask* proc, bool initial)
     } else {
         m_proxy->setSourceModel(nullptr);
         m_model.reset();
+    }
+}
+
+void LogPage::logLinesAppended(const QModelIndex& parent, int first, int last)
+{
+    if (!m_memory || !m_model)
+        return;
+    // Scan only the new rows; the label ignores anything that is not a memory sample.
+    for (int row = first; row <= last; ++row) {
+        const auto text = m_model->data(m_model->index(row, 0, parent), Qt::DisplayRole).toString();
+        if (m_memory->handleLogLine(text))
+            break;
     }
 }
 

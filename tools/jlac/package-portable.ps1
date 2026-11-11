@@ -45,6 +45,18 @@ try {
         throw "JL.exe was not produced at $exe"
     }
 
+    # The self-updater is a separate executable that PrismExternalUpdater launches as
+    # "<binary>_updater.exe" from the app directory. Without it the update check fails
+    # with "Failed to start after 5 seconds", so make sure it is packaged and that the
+    # error is loud at build time instead of at the user's first update check.
+    $updater = Join-Path $installDir "JL_updater.exe"
+    if (-not (Test-Path $updater)) {
+        throw "JL_updater.exe was not produced next to JL.exe; auto-update would break"
+    }
+
+    # Keep the standalone exe honest: it is only useful with the rest of the tree.
+    Copy-Item $updater (Join-Path $outDir "JL_updater.exe") -Force
+
     Copy-Item $exe (Join-Path $outDir "JL.exe") -Force
 
     $zip = Join-Path $outDir "JL-Windows-x64.zip"

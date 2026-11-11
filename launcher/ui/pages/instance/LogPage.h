@@ -44,6 +44,7 @@
 
 namespace Ui {
 class LogPage;
+class MemoryUsageLabel;
 }
 class QTextCharFormat;
 
@@ -89,8 +90,10 @@ class LogPage : public QWidget, public BasePage {
     void findPreviousActivated();
 
     void onInstanceLaunchTaskChanged(LaunchTask* proc);
+    void logLinesAppended(const QModelIndex& parent, int first, int last);
 
    private:
+    int maxHeapMiB() const;
     void modelStateToUI();
     void UIToModelState();
     void setInstanceLaunchTaskChanged(LaunchTask* proc, bool initial);
@@ -102,4 +105,5 @@ class LogPage : public QWidget, public BasePage {
 
     LogFormatProxyModel* m_proxy;
     shared_qobject_ptr<LogModel> m_model;
+    MemoryUsageLabel* m_memory = nullptr;
 };

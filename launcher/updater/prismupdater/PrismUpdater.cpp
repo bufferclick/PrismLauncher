@@ -697,11 +697,18 @@ QList<GitHubReleaseAsset> PrismUpdaterApp::validReleaseArtifacts(const GitHubRel
         auto assetIsArm = assetName.contains("arm64");
         auto assetIsArchive = assetName.endsWith(".zip") || assetName.endsWith(".tar.gz");
 
-        bool forPlatform = !platform.isEmpty() && assetName.contains(platform);
+        // JL's release assets are named for humans ("JL-Windows-x64.zip",
+        // "JL.exe"), which contain no "windows-msvc" artifact string. Accept the plain
+        // "windows" prefix for our own builds so the updater finds them; upstream Prism
+        // artifacts still take the exact-match path below.
+        const bool isJlBuild = assetName.contains("jl-windows");
+        bool forPlatform = isJlBuild || (!platform.isEmpty() && assetName.contains(platform));
         if (!forPlatform) {
             qDebug() << "Rejecting" << asset.name << "because platforms do not match";
         }
-        bool forPortable = assetName.contains("portable");
+        // JL's portable zip is "JL-Windows-x64.zip" (portable.txt lives inside it) while
+        // Prism's are marked "-portable". Treat the JL name as portable.
+        bool forPortable = assetName.contains("portable") || isJlBuild;
         if (forPlatform && assetName.contains("legacy") && !platform.contains("legacy")) {
             qDebug() << "Rejecting" << asset.name << "because platforms do not match";
             forPlatform = false;
@@ -1182,6 +1189,22 @@ bool PrismUpdaterApp::loadPrismVersionFromExe(const QString& exePath)
     return true;
 }
 
+/// rief Strip a leading "v"/"V" release-tag prefix from a version string.
+///
+/// GitHub tags are usually written "v0.0.2"; the launcher reports "0.0.2". The tag has
+/// to lose the prefix before it is parsed as a Version, otherwise FlexVer sorts the
+/// text section "v" before the numeric "0" and the release compares as *older* than the
+/// build that produced it.
+static QString stripVersionTagPrefix(const QString& tag)
+{
+    auto trimmed = tag.trimmed();
+    if (trimmed.size() > 1 && (trimmed.at(0) == QLatin1Char('v') || trimmed.at(0) == QLatin1Char('V')) &&
+        trimmed.at(1).isDigit()) {
+        return trimmed.mid(1);
+    }
+    return trimmed;
+}
+
 void PrismUpdaterApp::loadReleaseList()
 {
     auto githubRepo = m_prismRepoUrl;
@@ -1260,7 +1283,11 @@ Result<int> PrismUpdaterApp::parseReleasePage(const QByteArray* response)
         TRY_INTO(release.draft, Json::requireBoolean(obj, "draft"))
         TRY_INTO(release.prerelease, Json::requireBoolean(obj, "prerelease"))
         release.body = obj["body"].toString();
-        release.version = Version(release.tag_name);
+        // Release tags are conventionally "v0.0.2" while the build reports "0.0.2".
+        // FlexVer orders text sections before numeric ones, so a raw "v0.0.2" sorts
+        // below "0.0.2" and every release would look older than the running build.
+        // Strip the tag prefix before comparing.
+        release.version = Version(stripVersionTagPrefix(release.tag_name));
 
         TRY_INTO(const auto& releaseAssetsObj, Json::requireArray(obj, "assets"))
         for (auto assetJson : releaseAssetsObj) {
