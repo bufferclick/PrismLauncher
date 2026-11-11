@@ -44,6 +44,7 @@
 #include "Version.h"
 #include "meta/Index.h"
 #include "meta/VersionList.h"
+#include "minecraft/HorizonCreationTask.h"
 #include "minecraft/VanillaInstanceCreationTask.h"
 #include "ui/dialogs/FabricVersionsDialog.h"
 #include "ui/dialogs/NewInstanceDialog.h"
@@ -62,6 +63,7 @@ CustomPage::CustomPage(NewInstanceDialog* dialog, QWidget* parent) : QWidget(par
 
     connect(m_ui->loaderVersionList, &VersionSelectWidget::selectedVersionChanged, this, &CustomPage::setSelectedLoaderVersion);
     connect(m_ui->fabricFilter, &QRadioButton::toggled, this, &CustomPage::loaderFilterChanged);
+    connect(m_ui->horizonFilter, &QRadioButton::toggled, this, &CustomPage::loaderFilterChanged);
     connect(m_ui->loaderRefreshBtn, &QPushButton::clicked, this, &CustomPage::loaderRefresh);
     connect(m_ui->browseFabricButton, &QPushButton::clicked, this, [this] {
         FabricVersionsDialog dialog(this);
@@ -116,8 +118,20 @@ void CustomPage::filterChanged()
 
 void CustomPage::loaderFilterChanged()
 {
-    // JL is Fabric-only: there is exactly one loader, so this no longer reacts to
-    // a radio button and always resolves Fabric builds for the chosen version.
+    // Horizon is a separate native client, not a version the metadata index knows about, so
+    // it never has a loader list: the page just explains what the instance will do.
+    if (m_ui->horizonFilter->isChecked()) {
+        m_selectedLoader.clear();
+        m_selectedLoaderVersion.reset();
+        m_ui->loaderVersionList->setExactFilter(BaseVersionList::ParentVersionRole, "AAA");  // empty list
+        m_ui->loaderVersionList->setEmptyString(
+            tr("Horizon runs its own Rust client. The instance keeps its mods (.hnmod), "
+               "resource packs and saves in this folder, and Help → Horizon installs the client."));
+        m_ui->loaderVersionList->setEmptyMode(VersionListView::String);
+        suggestCurrent();
+        return;
+    }
+
     const QString minecraftVersion = m_selectedVersion ? m_selectedVersion->descriptor() : QString();
     if (minecraftVersion.isEmpty()) {
         m_ui->loaderVersionList->setExactFilter(BaseVersionList::ParentVersionRole, "AAA");  // empty list
@@ -180,13 +194,20 @@ QString CustomPage::selectedLoader() const
 
 QString CustomPage::selectedLoaderName() const
 {
-    // Fabric is the only loader JL installs, so this is no longer a user choice.
+    if (m_ui->horizonFilter->isChecked())
+        return QStringLiteral("Horizon");
     return QStringLiteral("Fabric");
 }
 
 void CustomPage::suggestCurrent()
 {
     if (!isOpened) {
+        return;
+    }
+
+    if (m_ui->horizonFilter->isChecked()) {
+        m_dialog->setSuggestedPack(QStringLiteral("Horizon"), new HorizonCreationTask());
+        m_dialog->setSuggestedIcon("default");
         return;
     }
 

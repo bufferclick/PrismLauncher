@@ -57,6 +57,11 @@ try {
     # Keep the standalone exe honest: it is only useful with the rest of the tree.
     Copy-Item $updater (Join-Path $outDir "JL_updater.exe") -Force
 
+    # IShellLink needs a real .ico on disk; the exe's embedded icon cannot be referenced by
+    # path, which is why the Start Menu shortcut rendered as a blank page icon.
+    $ico = Join-Path $installDir "JL.ico"
+    Copy-Item (Join-Path $root "program_info/JL.ico") $ico -Force
+
     Copy-Item $exe (Join-Path $outDir "JL.exe") -Force
 
     $zip = Join-Path $outDir "JL-Windows-x64.zip"

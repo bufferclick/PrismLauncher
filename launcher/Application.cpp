@@ -1398,9 +1398,13 @@ void Application::registerStartMenuEntry()
         return;
     }
 
-    // createShortcut() appends the extension itself on Windows.
+    // createShortcut() appends the extension itself on Windows. The icon argument has to be
+    // a path to a real .ico: passing a name produces a blank shortcut, which is what the
+    // first version did.
     const QString target = FS::PathCombine(appDir, BuildConfig.LAUNCHER_APP_BINARY_NAME + QStringLiteral(".exe"));
-    const QString created = FS::createShortcut(destination, target, {}, QStringLiteral("JL"), QStringLiteral("JL"));
+    const QString ico = FS::PathCombine(appDir, QStringLiteral("JL.ico"));
+    const QString icon = QFileInfo::exists(ico) ? ico : target;
+    const QString created = FS::createShortcut(destination, target, {}, QStringLiteral("JL"), icon);
     if (created.isEmpty()) {
         qWarning() << "Could not create the Start Menu entry";
         return;
