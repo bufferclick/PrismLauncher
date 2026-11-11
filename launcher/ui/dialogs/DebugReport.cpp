@@ -236,14 +236,6 @@ QString DebugReport::collect()
     }
 #endif
 
-    // ---------------------------------------------------------------- settings that affect speed
-    section(out, QStringLiteral("Settings that affect launch speed"));
-    const auto settings = APPLICATION->settings();
-    for (const auto& key : { "ConsoleMaxLines", "ShowGameTime", "CloseAfterLaunch", "AutoUpdateCheck", "UpdatesEnabled" }) {
-        if (auto setting = settings->getSetting(key); setting)
-            row(out, key, setting->get().toString());
-    }
-
     out << QString();
     out << QStringLiteral("End of report.");
 
