@@ -120,6 +120,13 @@ void PrismExternalUpdater::checkForUpdates(bool triggeredByUser) const
     if (priv->allowBeta) {
         args.append("--pre-release");
     }
+    // Recovery escape hatch: point the updater at another repository. Used when the build
+    // that shipped is broken (for example a release whose assets the matcher rejects), so
+    // a user can still get onto a working release from the canonical repo.
+    if (auto repo = qEnvironmentVariable("JL_UPDATER_REPO"); !repo.isEmpty()) {
+        args.append("--update-url");
+        args.append(repo);
+    }
 
     proc.start(priv->appDir.absoluteFilePath(exeName), args);
     if (auto resultStart = proc.waitForStarted(5000); !resultStart) {

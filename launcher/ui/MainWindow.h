@@ -87,6 +87,7 @@ class MainWindow : public QMainWindow {
 
    private slots:
     void on_actionAbout_triggered();
+    void on_actionDebugMode_triggered();
 
     void on_actionAddInstance_triggered();
 
@@ -132,6 +133,7 @@ class MainWindow : public QMainWindow {
 
     void on_actionClearMetadata_triggered();
     void on_actionFabricVersions_triggered();
+    void on_actionHorizon_triggered();
 
 #ifdef Q_OS_MACOS
     void on_actionAddToPATH_triggered();

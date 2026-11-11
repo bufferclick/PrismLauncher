@@ -322,6 +322,16 @@ QMenu::separator {
     margin: 5px 8px;
 }
 
+/* The instance name is a QTextEdit inside EditableLabel. Without an explicit rule it
+   inherits the palette's Text colour on a transparent Base, which renders as a clipped,
+   doubled glyph run on the dark background. Give it its own transparent surface. */
+QTextEdit#nameLabel, QWidget#nameLabel QTextEdit {
+    background: transparent;
+    border: none;
+    color: #F2F2F3;
+    selection-background-color: #2B2B31;
+}
+
 QStatusBar {
     background: transparent;
     border-top: 1px solid #1D1D22;

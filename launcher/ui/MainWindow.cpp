@@ -52,6 +52,7 @@
 #include <QVariant>
 
 #include <QAction>
+#include <QGuiApplication>
 #include <QActionGroup>
 #include <QApplication>
 #include <QButtonGroup>
@@ -94,6 +95,8 @@
 #include "InstanceWindow.h"
 
 #include "ui/dialogs/AboutDialog.h"
+#include "ui/dialogs/DebugModeDialog.h"
+#include "ui/dialogs/HorizonDialog.h"
 #include "ui/dialogs/FabricVersionsDialog.h"
 #include "ui/dialogs/CopyInstanceDialog.h"
 #include "ui/dialogs/CreateShortcutDialog.h"
@@ -216,7 +219,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
         helpMenuButton = dynamic_cast<QToolButton*>(ui->mainToolBar->widgetForAction(ui->actionHelpButton));
         ui->actionHelpButton->setMenu(new QMenu(this));
         ui->actionHelpButton->menu()->addActions(ui->helpMenu->actions());
-        ui->actionHelpButton->menu()->removeAction(ui->actionCheckUpdate);
+
+        // Hidden maintainer panel: hold Alt+Shift when clicking Help and the menu never
+        // opens - the debug panel does. An event filter is used because the gesture has to
+        // win before QToolButton's InstantPopup shows the menu.
+        helpMenuButton->installEventFilter(this);
+
         helpMenuButton->setPopupMode(QToolButton::InstantPopup);
 
         auto accountMenuButton = dynamic_cast<QToolButton*>(ui->mainToolBar->widgetForAction(ui->actionAccountsButton));
@@ -772,6 +780,14 @@ void MainWindow::defaultAccountChanged()
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* ev)
 {
+    // Alt+Shift+click on Help opens the maintainer panel instead of the Help menu.
+    if (helpMenuButton && obj == helpMenuButton && ev->type() == QEvent::MouseButtonPress) {
+        const auto modifiers = QGuiApplication::queryKeyboardModifiers();
+        if (modifiers.testFlag(Qt::AltModifier) && modifiers.testFlag(Qt::ShiftModifier)) {
+            on_actionDebugMode_triggered();
+            return true;
+        }
+    }
     if (obj == view) {
         if (ev->type() == QEvent::KeyPress) {
             secretEventFilter->input(ev);
@@ -1370,11 +1386,21 @@ void MainWindow::refreshInstances()
 
 void MainWindow::checkForUpdates()
 {
-    if (APPLICATION->updaterEnabled()) {
-        APPLICATION->triggerUpdateCheck();
-    } else {
+    if (!APPLICATION->updaterEnabled()) {
         qWarning() << "Updater not set up. Cannot check for updates.";
+        return;
     }
+
+    // Recovery escape hatch: Alt+Shift while choosing "Check for updates" makes the update
+    // check read from this repository instead of whatever the build was configured with.
+    // That is how a user gets off a release whose updater is broken.
+    const auto modifiers = QGuiApplication::queryKeyboardModifiers();
+    if (modifiers.testFlag(Qt::AltModifier) && modifiers.testFlag(Qt::ShiftModifier)) {
+        qDebug() << "Update check forced through the canonical JL repository";
+        qputenv("JL_UPDATER_REPO", "https://github.com/bufferclick/PrismLauncher");
+    }
+
+    APPLICATION->triggerUpdateCheck();
 }
 
 void MainWindow::on_actionSettings_triggered()
@@ -1493,6 +1519,21 @@ void MainWindow::newsButtonClicked()
     NewsDialog news_dialog(entries, this);
     news_dialog.toggleArticleList();
     news_dialog.exec();
+}
+
+void MainWindow::on_actionDebugMode_triggered()
+{
+    // DebugModeDialog owns its report; constructing it collects the data.
+    auto* dialog = new DebugModeDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+}
+
+void MainWindow::on_actionHorizon_triggered()
+{
+    auto* dialog = new HorizonDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
 }
 
 void MainWindow::on_actionAbout_triggered()
