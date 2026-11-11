@@ -23,6 +23,8 @@
 #include <QThread>
 
 #include "Application.h"
+#include "InstanceList.h"
+#include "minecraft/auth/AccountList.h"
 #include "BuildConfig.h"
 #include "FileSystem.h"
 #include "launch/LaunchTask.h"
