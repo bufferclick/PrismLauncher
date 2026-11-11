@@ -13,6 +13,7 @@
 #include <QDir>
 
 #include "FileSystem.h"
+#include "minecraft/PackProfile.h"
 #include "settings/INISettingsObject.h"
 #include "settings/SettingsObject.h"
 
@@ -34,6 +35,10 @@ void HorizonCreationTask::executeTask()
 
         m_instance->setName(name());
         m_instance->setIconKey(m_instIcon.isEmpty() ? QStringLiteral("default") : m_instIcon);
+
+        // settings() runs loadSpecificSettings(), which (in MinecraftInstance) writes
+        // InstanceType=OneSix. Setting the type after that call, inside the Lock, means the
+        // value written when the Lock is released is the Horizon one.
         m_instance->settings()->set("InstanceType", HorizonInstance::typeString());
 
         // Point at the installed client so the first launch works without extra setup.

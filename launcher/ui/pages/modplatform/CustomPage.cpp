@@ -123,7 +123,9 @@ void CustomPage::loaderFilterChanged()
     if (m_ui->horizonFilter->isChecked()) {
         m_selectedLoader.clear();
         m_selectedLoaderVersion.reset();
-        m_ui->loaderVersionList->setExactFilter(BaseVersionList::ParentVersionRole, "AAA");  // empty list
+        // No loader versions to list: Horizon is not built from Minecraft libraries. (This is
+        // the same "match nothing" sentinel the vanilla branch below uses.)
+        m_ui->loaderVersionList->setExactFilter(BaseVersionList::ParentVersionRole, "AAA");
         m_ui->loaderVersionList->setEmptyString(
             tr("Horizon runs its own Rust client. The instance keeps its mods (.hnmod), "
                "resource packs and saves in this folder, and Help → Horizon installs the client."));

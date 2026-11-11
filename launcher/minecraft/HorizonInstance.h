@@ -12,6 +12,7 @@
 
 #include <memory>
 
+#include "launch/LaunchTask.h"
 #include "minecraft/MinecraftInstance.h"
 
 class HorizonInstance;
@@ -53,6 +54,12 @@ class HorizonInstance : public MinecraftInstance {
     static QString typeString() { return QStringLiteral("Horizon"); }
 
     LaunchTask* createLaunchTask(AuthSessionPtr account, MinecraftTarget::Ptr targetToJoin) override;
+
+    /// \brief Loads the Java settings, then restores InstanceType=Horizon.
+    ///
+    /// MinecraftInstance::loadSpecificSettings() force-writes "OneSix" into InstanceType, which
+    /// would demote this instance on first use. This wrapper repairs it afterwards.
+    void loadSpecificSettings() override;
 
     /// \brief Path to the Horizon client this instance should run.
     QString horizonBinary() const;

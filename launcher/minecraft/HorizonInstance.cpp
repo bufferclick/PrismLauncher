@@ -16,7 +16,8 @@
 
 #include "FileSystem.h"
 #include "launch/LaunchTask.h"
-#include "launch/LoggedProcess.h"
+#include "LoggedProcess.h"
+#include "launch/LaunchStep.h"
 #include "settings/SettingsObject.h"
 
 // ---------------------------------------------------------------------------------------
@@ -38,19 +39,19 @@ class HorizonLaunchStep : public LaunchStep {
     {
         const auto binary = m_instance->horizonBinary();
         if (binary.isEmpty() || !QFileInfo::exists(binary)) {
-            const char* reason = QT_TR_NOOP("Horizon is not installed. Install it from Help → Horizon, "
-                                            "or set the client path in this instance's settings.");
-            emit logLine(tr(reason), MessageLevel::Fatal);
-            emitFailed(tr(reason));
+            const QString reason = tr("Horizon is not installed. Install it from Help → Horizon, "
+                                     "or set the client path in this instance's settings.");
+            emit logLine(reason, MessageLevel::Fatal);
+            emitFailed(reason);
             return;
         }
 
         auto* instanceSettings = m_instance->settings();
         const auto dataDir = m_instance->horizonDataDir();
         if (!FS::ensureFolderPathExists(dataDir)) {
-            const char* reason = QT_TR_NOOP("Could not create the Horizon data folder: %1");
-            emit logLine(QString(reason).arg(dataDir), MessageLevel::Fatal);
-            emitFailed(QString(reason).arg(dataDir));
+            const QString reason = tr("Could not create the Horizon data folder: %1").arg(dataDir);
+            emit logLine(reason, MessageLevel::Fatal);
+            emitFailed(reason);
             return;
         }
 
@@ -61,8 +62,8 @@ class HorizonLaunchStep : public LaunchStep {
         m_process.setProcessEnvironment(m_instance->createLaunchEnvironment());
         m_process.setWorkingDirectory(dataDir);
 
-        // Horizon accepts a game directory; pass it explicitly so a moved install still works.
-        QStringList args{ instanceSettings->get("HorizonArgs").toString() };
+        // Horizon accepts extra arguments; split the stored string the way a shell would.
+        const auto args = QProcess::splitCommand(instanceSettings->get("HorizonArgs").toString());
         m_process.start(binary, args);
     }
 
@@ -77,24 +78,33 @@ class HorizonLaunchStep : public LaunchStep {
     {
         switch (state) {
             case LoggedProcess::FailedToStart: {
-                const char* reason = QT_TR_NOOP("Could not start Horizon: %1");
-                emit logLine(QString(reason).arg(m_process.errorString()), MessageLevel::Fatal);
-                emitFailed(QString(reason).arg(m_process.errorString()));
+                const QString reason = tr("Could not start Horizon: %1").arg(m_process.errorString());
+                emit logLine(reason, MessageLevel::Fatal);
+                emitFailed(reason);
                 return;
             }
             case LoggedProcess::Aborted:
-            case LoggedProcess::Crashed:
+            case LoggedProcess::Crashed: {
+                m_parent->setPid(-1);
                 m_parent->instance()->setMinecraftRunning(false);
-                emitFailed(tr("Horizon exited."));
+                emitFailed(tr("Horizon crashed or was closed by the launcher."));
                 return;
+            }
             case LoggedProcess::Finished: {
+                const int exitCode = m_process.exitCode();
+                m_parent->setPid(-1);
                 m_parent->instance()->setMinecraftRunning(false);
-                // Horizon closing normally is not a launcher failure; report the exit code.
-                emit logLine(tr("Horizon exited with code %1.").arg(m_process.exitCode()), MessageLevel::Launcher);
+                emit logLine(tr("Horizon exited with code %1.").arg(exitCode), MessageLevel::Launcher);
+                // Same rule as a Java instance: a non-zero exit is a crash, not a quiet quit.
+                if (exitCode != 0) {
+                    emitFailed(tr("Horizon crashed (exit code %1).").arg(exitCode));
+                    return;
+                }
                 emitSucceeded();
                 return;
             }
             case LoggedProcess::Running:
+                emit logLine(tr("Horizon process ID: %1").arg(m_process.processId()), MessageLevel::Launcher);
                 m_parent->setPid(m_process.processId());
                 m_parent->instance()->setMinecraftRunning(true);
                 return;
@@ -117,6 +127,10 @@ HorizonLaunchTask::HorizonLaunchTask(HorizonInstance* inst) : LaunchTask(inst) {
 std::unique_ptr<HorizonLaunchTask> HorizonLaunchTask::create(HorizonInstance* inst)
 {
     std::unique_ptr<HorizonLaunchTask> task(new HorizonLaunchTask(inst));
+    // LaunchTask::create() is what normally calls init(); HorizonLaunchTask is constructed
+    // directly here (its ctor is protected), so init() has to be called by hand. Without it the
+    // instance is never marked as running and the UI stays on "Launch".
+    task->init();
     task->appendStep(shared_qobject_ptr<LaunchStep>(new HorizonLaunchStep(task.get(), inst)));
     return task;
 }
@@ -130,11 +144,22 @@ HorizonInstance::HorizonInstance(SettingsObject* globalSettings, std::unique_ptr
 {
     // Horizon instances are not Java instances; make it possible to tell them apart without
     // touching the components file.
-    if (auto type = m_settings->get("InstanceType").toString(); type != typeString())
-        m_settings->set("InstanceType", typeString());
+    if (!m_settings->getSetting("InstanceType"))
+        m_settings->registerSetting("InstanceType", QString());
+    m_settings->set("InstanceType", typeString());
 
-    m_settings->registerSetting("HorizonBinary", "");
-    m_settings->registerSetting("HorizonArgs", "");
+    m_settings->registerSetting("HorizonBinary", QString());
+    m_settings->registerSetting("HorizonArgs", QString());
+}
+
+void HorizonInstance::loadSpecificSettings()
+{
+    MinecraftInstance::loadSpecificSettings();
+    // MinecraftInstance force-writes "OneSix" here (it cannot know about subclasses), so put the
+    // real type back. Without this the instance would silently become a Java instance after the
+    // first launch and stop using HorizonLaunchTask.
+    if (m_settings->get("InstanceType").toString() != typeString())
+        m_settings->set("InstanceType", typeString());
 }
 
 QString HorizonInstance::horizonDataDir() const
