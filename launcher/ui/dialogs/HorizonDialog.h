@@ -11,26 +11,28 @@
 #pragma once
 
 #include <QDialog>
-#include <QUrl>
 
 class QLabel;
 class QPlainTextEdit;
 class QProgressBar;
 class QPushButton;
-class NetJob;
 class Task;
 
 /**
- * Installs and launches Horizon, the Rust reimplementation of Minecraft: Java Edition.
+ * Installs Horizon: the game files, and the resources they need.
  *
- * Horizon is a separate native program, not a Minecraft instance: it cannot be started by
- * a Java launcher, and its mods are `.hnmod` / Rust-to-WebAssembly rather than Fabric jars.
- * This dialog therefore does what a launcher legitimately can: fetch the official Horizon
- * launcher for this platform from its GitHub releases, keep it in JL's data directory, and
- * run it. Mods and resource packs are then managed by Horizon itself.
+ * This follows Horizon's own "Running Horizon from another launcher"
+ * (docs/api/launch-guide.md):
  *
- * JL ships none of Horizon's code or assets; the button in About goes to the project so
- * its developers get the support.
+ *  1. a build is one archive per platform from a GitHub release of horizon-rust/horizon —
+ *     horizon-windows-x64.zip holds horizon-client, horizon-prepare, research-lock.json and
+ *     exporters/. It is the GAME FILES A LAUNCHER INSTALLS, not a launcher and not an installer;
+ *  2. the newest build is the release tagged `nightly`;
+ *  3. `horizon-prepare` turns the player's own Minecraft files into the resources the client
+ *     reads, checked against research-lock.json. Horizon never downloads Mojang's files.
+ *
+ * So this dialog downloads a build, unpacks it into <dataRoot>/horizon/<tag>, then prepares
+ * resources from the user's Minecraft. It never runs an installer.
  */
 class HorizonDialog : public QDialog {
     Q_OBJECT
@@ -38,30 +40,31 @@ class HorizonDialog : public QDialog {
    public:
     explicit HorizonDialog(QWidget* parent = nullptr);
 
-    /// \brief Where the downloaded launcher lives.
+    /// \brief Where builds are unpacked: <dataRoot>/horizon.
     static QString installDir();
 
+    /// \brief True when a build is unpacked and ready to run.
+    static bool hasUsableBuild();
+
    private slots:
-    void checkForLauncher();
-    void downloadLauncher();
-    void runHorizon();
+    void downloadBuild();
+    void prepareResources();
     void openProjectPage();
 
    private:
+    void refreshStatus();
     void appendLog(const QString& line);
     void setBusy(bool busy);
-    void resolveLocalLauncher();
+    void runTask(Task* task);
     void fail(const QString& reason);
 
     QLabel* m_status = nullptr;
     QPlainTextEdit* m_log = nullptr;
     QProgressBar* m_progress = nullptr;
-    QPushButton* m_check = nullptr;
     QPushButton* m_download = nullptr;
-    QPushButton* m_run = nullptr;
+    QPushButton* m_prepare = nullptr;
     QPushButton* m_support = nullptr;
+    QPushButton* m_close = nullptr;
 
-    QString m_launcherPath;
-    QString m_downloadUrl;
-    QString m_releaseTag;
+    QString m_buildDir;
 };

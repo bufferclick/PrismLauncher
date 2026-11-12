@@ -364,7 +364,10 @@ void PrismExternalUpdater::performUpdate(const QString& versionTag) const
     exeName = QString("bin/%1").arg(exeName);
 #endif
 
-    QStringList args = { "--dir", priv->dataDir.absolutePath(), "--install-version", versionTag };
+    // The repo is passed every time: relying on the build-time constant is what made updates
+    // look for releases in the wrong repository and fail with "no release for version".
+    QStringList args = { "--dir", priv->dataDir.absolutePath(), "--install-version", versionTag, "--update-url",
+                         BuildConfig.UPDATER_GITHUB_REPO };
     if (priv->allowBeta) {
         args.append("--pre-release");
     }

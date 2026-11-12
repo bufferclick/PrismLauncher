@@ -61,8 +61,17 @@ class HorizonInstance : public MinecraftInstance {
     /// would demote this instance on first use. This wrapper repairs it afterwards.
     void loadSpecificSettings() override;
 
-    /// \brief Path to the Horizon client this instance should run.
-    QString horizonBinary() const;
+    /// \brief The Horizon build (tag) this instance runs; empty means "newest installed".
+    QString horizonBuildDir() const;
+
+    /// \brief The prepared resources folder this instance may use, or empty if none is ready.
+    ///
+    /// Horizon reads game data prepared from the player's own Minecraft copy, not from the
+    /// instance, so this is shared between instances of the same build and Minecraft version.
+    QString horizonResourcesDir() const;
+
+    /// \brief The account session as Horizon's Launch API expects it, or empty when signed out.
+    QString horizonSessionJson() const;
 
     /// \brief Where Horizon keeps its data for this instance.
     QString horizonDataDir() const;
@@ -73,11 +82,8 @@ class HorizonInstance : public MinecraftInstance {
     /// \brief "Horizon 26.3" instead of the empty component list a Horizon instance has.
     QString getStatusbarDescription() override;
 
-    /// \brief True when the configured/inferred client exists and is executable.
-    bool isHorizonInstalled() const;
-
-    /// \brief Windows only: the usual install locations, for the "find it for me" path.
-    static QString findInstalledHorizon();
+    /// \brief True when a build is unpacked and its resources are prepared.
+    bool isHorizonReady() const;
 
     /// \brief The Horizon launcher binary used to (re)build the game with this instance's mods.
     ///        Horizon compiles .hnmod mods into the game; there is no in-game "apply" step.
