@@ -10,11 +10,15 @@
 
 #include "HorizonInstance.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QLocale>
 #include <QStandardPaths>
 
+#include "Application.h"
 #include "FileSystem.h"
+#include "MMCTime.h"
 #include "launch/LaunchTask.h"
 #include "LoggedProcess.h"
 #include "launch/LaunchStep.h"
@@ -150,6 +154,7 @@ HorizonInstance::HorizonInstance(SettingsObject* globalSettings, std::unique_ptr
 
     m_settings->registerSetting("HorizonBinary", QString());
     m_settings->registerSetting("HorizonArgs", QString());
+    m_settings->registerSetting("HorizonGameVersion", QString());
 }
 
 void HorizonInstance::loadSpecificSettings()
@@ -165,6 +170,39 @@ void HorizonInstance::loadSpecificSettings()
 QString HorizonInstance::horizonDataDir() const
 {
     return gameRoot();
+}
+
+QString HorizonInstance::horizonGameVersion() const
+{
+    return m_settings->get("HorizonGameVersion").toString();
+}
+
+QString HorizonInstance::getStatusbarDescription()
+{
+    // Horizon instances have no components, so the base implementation would print
+    // "Minecraft " and stop. Name the client and the game version instead.
+    const auto version = horizonGameVersion();
+    QString description = version.isEmpty() ? tr("Horizon") : tr("Horizon (Minecraft %1)").arg(version);
+
+    if (m_settings->get("ShowGameTime").toBool()) {
+        if (lastTimePlayed() > 0 && lastLaunch() > 0) {
+            const auto lastLaunchTime = QDateTime::fromMSecsSinceEpoch(lastLaunch());
+            description.append(
+                tr(", last played on %1 for %2")
+                    .arg(QLocale().toString(lastLaunchTime, QLocale::ShortFormat))
+                    .arg(Time::prettifyDuration(lastTimePlayed(),
+                                                APPLICATION->settings()->get("ShowGameTimeWithoutDays").toBool())));
+        }
+        if (totalTimePlayed() > 0) {
+            description.append(
+                tr(", total played for %1")
+                    .arg(Time::prettifyDuration(totalTimePlayed(), APPLICATION->settings()->get("ShowGameTimeWithoutDays").toBool())));
+        }
+    }
+    if (hasCrashed()) {
+        description.append(tr(", has crashed."));
+    }
+    return description;
 }
 
 QString HorizonInstance::horizonBinary() const

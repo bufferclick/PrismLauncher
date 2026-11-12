@@ -67,6 +67,12 @@ class HorizonInstance : public MinecraftInstance {
     /// \brief Where Horizon keeps its data for this instance.
     QString horizonDataDir() const;
 
+    /// \brief The Minecraft version this Horizon client runs, e.g. "26.3".
+    QString horizonGameVersion() const;
+
+    /// \brief "Horizon 26.3" instead of the empty component list a Horizon instance has.
+    QString getStatusbarDescription() override;
+
     /// \brief True when the configured/inferred client exists and is executable.
     bool isHorizonInstalled() const;
 

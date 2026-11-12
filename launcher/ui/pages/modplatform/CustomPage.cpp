@@ -79,9 +79,10 @@ void CustomPage::openedImpl()
         m_initialized = true;
         // Fabric is preselected and always on.
         m_ui->fabricFilter->setChecked(true);
-    } else {
-        suggestCurrent();
     }
+
+    updateLoaderUi();
+    suggestCurrent();
 }
 
 void CustomPage::refresh()
@@ -118,21 +119,19 @@ void CustomPage::filterChanged()
 
 void CustomPage::loaderFilterChanged()
 {
-    // Horizon is a separate native client, not a version the metadata index knows about, so
-    // it never has a loader list: the page just explains what the instance will do.
+    // Horizon is its own client built for a single Minecraft version. There is no version to
+    // pick and no loader build to pick, so both choosers are hidden and the page just says
+    // what the instance will be.
     if (m_ui->horizonFilter->isChecked()) {
+        m_selectedVersion.reset();
         m_selectedLoader.clear();
         m_selectedLoaderVersion.reset();
-        // No loader versions to list: Horizon is not built from Minecraft libraries. (This is
-        // the same "match nothing" sentinel the vanilla branch below uses.)
-        m_ui->loaderVersionList->setExactFilter(BaseVersionList::ParentVersionRole, "AAA");
-        m_ui->loaderVersionList->setEmptyString(
-            tr("Horizon runs its own Rust client. The instance keeps its mods (.hnmod), "
-               "resource packs and saves in this folder, and Help → Horizon installs the client."));
-        m_ui->loaderVersionList->setEmptyMode(VersionListView::String);
+        updateLoaderUi();
         suggestCurrent();
         return;
     }
+
+    updateLoaderUi();
 
     const QString minecraftVersion = m_selectedVersion ? m_selectedVersion->descriptor() : QString();
     if (minecraftVersion.isEmpty()) {
@@ -164,6 +163,25 @@ void CustomPage::loaderFilterChanged()
     m_ui->loaderVersionList->setEmptyString(tr("No Fabric builds are available for Minecraft %1 yet.").arg(minecraftVersion));
 }
 
+void CustomPage::updateLoaderUi()
+{
+    const bool horizon = m_ui->horizonFilter->isChecked();
+
+    // With Horizon there is nothing to choose, so the version picker, the separator and the
+    // loader picker are all hidden and the summary takes their place.
+    m_ui->minecraftGroup->setVisible(!horizon);
+    m_ui->loaderLine->setVisible(!horizon);
+    m_ui->loaderGroup->setVisible(!horizon);
+    m_ui->horizonSummary->setVisible(horizon);
+    m_ui->browseFabricButton->setVisible(!horizon);
+
+    m_ui->horizonVersionLabel->setText(tr("Minecraft %1").arg(HorizonCreationTask::gameVersion()));
+
+    m_ui->pageTitle->setText(horizon ? tr("New Horizon instance") : tr("New Fabric instance"));
+    m_ui->pageSubtitle->setText(horizon ? tr("Horizon is a complete client of its own — nothing to configure here.")
+                                        : tr("Pick a Minecraft version, then a Fabric loader build."));
+}
+
 CustomPage::~CustomPage()
 {
     delete m_ui;
@@ -177,6 +195,9 @@ bool CustomPage::shouldDisplay() const
 void CustomPage::retranslate()
 {
     m_ui->retranslateUi(this);
+    // The title and subtitle are also set in code (Horizon vs Fabric), so re-apply whichever
+    // one the current loader selection calls for.
+    updateLoaderUi();
 }
 
 BaseVersion::Ptr CustomPage::selectedVersion() const
@@ -207,6 +228,7 @@ void CustomPage::suggestCurrent()
         return;
     }
 
+    // Horizon needs no version: the task knows the one version Horizon runs.
     if (m_ui->horizonFilter->isChecked()) {
         m_dialog->setSuggestedPack(QStringLiteral("Horizon"), new HorizonCreationTask());
         m_dialog->setSuggestedIcon("default");
@@ -236,6 +258,11 @@ void CustomPage::suggestCurrent()
 void CustomPage::setSelectedVersion(BaseVersion::Ptr version)
 {
     m_selectedVersion = std::move(version);
+    // The version list keeps loading in the background after switching to Horizon; ignoring it
+    // avoids re-running the Fabric loader lookup the user no longer asked for.
+    if (m_ui->horizonFilter->isChecked()) {
+        return;
+    }
     suggestCurrent();
     loaderFilterChanged();
 }

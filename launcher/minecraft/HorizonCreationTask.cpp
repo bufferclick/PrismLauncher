@@ -44,6 +44,9 @@ void HorizonCreationTask::executeTask()
         // Point at the installed client so the first launch works without extra setup.
         if (const auto binary = HorizonInstance::findInstalledHorizon(); !binary.isEmpty())
             m_instance->settings()->set("HorizonBinary", binary);
+
+        // Remembered so the instance can say which game version it belongs to without asking.
+        m_instance->settings()->set("HorizonGameVersion", gameVersion());
     }
 
     // The folders Horizon and its users expect, created up front.

@@ -78,6 +78,7 @@ class CustomPage : public QWidget, public BasePage {
     void refresh();
     void loaderRefresh();
     void suggestCurrent();
+    void updateLoaderUi();
 
    private:
     bool m_initialized = false;
