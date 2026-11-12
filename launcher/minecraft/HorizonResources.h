@@ -101,6 +101,8 @@ class HorizonUpdateTask : public Task {
 
    private:
     void checkNewest();
+    void scanPage(int page);
+    void considerTag(const QString& tag);
     void fail(const QString& reason);
 
     QString m_currentTag;

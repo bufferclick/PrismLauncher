@@ -92,7 +92,7 @@ void HorizonDialog::refreshStatus()
 
     if (!build) {
         m_status->setText(tr("<b>No Horizon build installed.</b> Press “Download Horizon” to fetch "
-                             "the newest nightly build (about 30 MB)."));
+                             "the newest nightly build (about 45 MB)."));
     } else if (prepared.isEmpty()) {
         m_status->setText(tr("<b>Horizon %1 is installed.</b> Next, press “Prepare game files”. "
                              "Horizon will read your own Minecraft installation and build the "
@@ -100,7 +100,7 @@ void HorizonDialog::refreshStatus()
                               .arg(tag));
     } else {
         m_status->setText(tr("<b>Horizon %1 is ready.</b><br>Build: %2<br>Resources: %3")
-                              .arg(tag, m_buildDir, prepared));
+                              .arg(tag, HorizonBuilds::rootOf(m_buildDir), prepared));
     }
 
     m_prepare->setEnabled(build);

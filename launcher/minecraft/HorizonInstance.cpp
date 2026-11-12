@@ -101,7 +101,9 @@ class HorizonLaunchStep : public LaunchStep {
 
         m_process.setDetachable(true);
         m_process.setProcessEnvironment(m_instance->createLaunchEnvironment());
-        m_process.setWorkingDirectory(buildDir);
+        // Run from the folder holding the programs: the archive nests them one level down, and
+        // horizon-prepare looks for research-lock.json and exporters/ beside itself.
+        m_process.setWorkingDirectory(HorizonBuilds::rootOf(buildDir));
         m_process.start(client, args);
 
         if (!session.isEmpty() && m_process.waitForStarted(5000)) {
@@ -292,7 +294,7 @@ QString HorizonInstance::horizonLauncher() const
     // PATH, or in JL's own horizon folder.
     const auto client = HorizonBuilds::clientPath(horizonBuildDir());
     if (!client.isEmpty()) {
-        const QFileInfo info(client);
+        const QFileInfo info(client);  // already inside the real root
         for (const auto& name : { "horizon-launcher.exe", "horizon-launcher" }) {
             const auto sibling = FS::PathCombine(info.absolutePath(), name);
             if (QFileInfo::exists(sibling))
