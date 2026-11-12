@@ -25,6 +25,13 @@
 #include "net/NetJob.h"
 #include "net/Request.h"
 
+namespace {
+/// Pages walked when the direct `nightly` tag lookup fails: the releases list is led by a
+/// `launcher@x.y.z` entry several times a day, so a Nightly is often not on page 1.
+constexpr int kMaxReleasePages = 10;
+constexpr int kReleasesPerPage = 100;
+}  // namespace
+
 // ---------------------------------------------------------------------------------------
 // Prepared resources
 // ---------------------------------------------------------------------------------------
@@ -145,6 +152,15 @@ void HorizonDownloadTask::resolveRelease()
 void HorizonDownloadTask::downloadArchive(const QUrl& url)
 {
     const auto target = HorizonBuilds::buildDir(m_tag);
+    if (QDir(target).exists() && !HorizonBuilds::isComplete(target)) {
+        // Left behind by an earlier, broken unpack. Remove it, or every retry would unpack on
+        // top of a folder that can never pass the check.
+        emit logLine(tr("Discarding an unusable earlier download at %1").arg(target));
+        if (!FS::deletePath(target)) {
+            fail(tr("Could not clear the broken download at %1. Delete it by hand and retry.").arg(target));
+            return;
+        }
+    }
     if (!FS::ensureFolderPathExists(target)) {
         fail(tr("Could not create %1").arg(target));
         return;
@@ -179,8 +195,14 @@ void HorizonDownloadTask::unpackArchive()
         QFile::remove(m_archivePath);
 
         if (!HorizonBuilds::isComplete(HorizonBuilds::buildDir(m_tag))) {
-            fail(tr("The Horizon archive did not contain horizon-client, horizon-prepare and "
-                    "research-lock.json. JL will not run a partial build."));
+            // Name what is actually there: a wrong-layout archive is otherwise impossible to
+            // diagnose from the outside, which is exactly how the first attempt went wrong.
+            const auto dir = HorizonBuilds::buildDir(m_tag);
+            const auto root = HorizonBuilds::rootOf(dir);
+            const auto found = QDir(root).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot).join(QStringLiteral(", "));
+            fail(tr("The Horizon archive was unpacked to %1 but is not a usable build: it needs "
+                    "horizon-client, horizon-prepare and exporters/manifest.json. What is there: %2")
+                     .arg(root, found.isEmpty() ? tr("nothing") : found));
             return;
         }
         emitSucceeded();
@@ -222,7 +244,9 @@ void HorizonPrepareTask::executeTask()
 
     m_process = new QProcess(this);
     m_process->setProgram(prepare);
-    m_process->setWorkingDirectory(m_buildDir);
+    // The preparer reads research-lock.json and exporters/ from beside its own binary, which the
+    // archive nests one level below the unpack folder.
+    m_process->setWorkingDirectory(HorizonBuilds::rootOf(m_buildDir));
     m_process->setProcessChannelMode(QProcess::SeparateChannels);
 
     // Horizon's documented preparation call. --complete copies the sounds and fails unless the
@@ -305,8 +329,9 @@ void HorizonUpdateTask::executeTask()
 
 void HorizonUpdateTask::checkNewest()
 {
-    // `nightly` is a moving tag, so asking for it always names the newest build. Cheaper than
-    // listing every release: one request, one object.
+    // Cheap and exact: ask for the moving `nightly` tag itself. The repository also publishes a
+    // `launcher@x.y.z` release several times a day, which pushes the Nightlies off the first
+    // page of the releases list -- but a direct tag lookup never pages, so it cannot be hidden.
     auto url = QUrl(QStringLiteral("%1/tags/%2").arg(HorizonBuilds::kReleasesApi, HorizonBuilds::kNightlyTag));
     auto [request, response] = Net::Request::makeByteArray(url);
 
@@ -316,56 +341,129 @@ void HorizonUpdateTask::checkNewest()
         job->deleteLater();
         const auto doc = QJsonDocument::fromJson(*response);
         if (!doc.isObject()) {
-            // An update check that cannot run must never block a launch: the build already
-            // installed still works.
             emit logLine(tr("Could not read Horizon's release information; starting the installed build."));
             emitSucceeded();
             return;
         }
         const auto tag = doc.object().value("tag_name").toString();
         if (tag.isEmpty()) {
+            emit logLine(tr("Horizon's nightly release had no tag; starting the installed build."));
             emitSucceeded();
             return;
         }
-        if (tag == m_currentTag) {
-            emit logLine(tr("Horizon %1 is the newest build.").arg(tag));
-            emitSucceeded();
-            return;
-        }
-        if (HorizonBuilds::isComplete(HorizonBuilds::buildDir(tag))) {
-            // Already downloaded by an earlier launch or instance; just switch to it.
-            emit logLine(tr("Horizon %1 is already installed; using it.").arg(tag));
-            m_newTag = tag;
-            m_updated = true;
-            emitSucceeded();
-            return;
-        }
-
-        emit logLine(tr("A newer Horizon build is available: %1 (installed: %2). Updating…")
-                         .arg(tag, m_currentTag.isEmpty() ? tr("none") : m_currentTag));
-
-        auto* download = new HorizonDownloadTask(tag, m_parent);
-        connect(download, &HorizonDownloadTask::logLine, this, [this](QString line) { emit logLine(line); });
-        connect(download, &Task::succeeded, this, [this, download] {
-            m_newTag = download->installedTag();
-            m_updated = true;
-            download->deleteLater();
-            emitSucceeded();
-        });
-        connect(download, &Task::failed, this, [this, download](const QString& reason) {
-            download->deleteLater();
-            // Same rule as above: a failed update must not stop the installed build from starting.
-            emit logLine(tr("The update failed (%1); starting the installed build instead.").arg(reason));
-            emitSucceeded();
-        });
-        download->start();
+        considerTag(tag);
     });
+    // A tag lookup can 404 if the nightly was withdrawn. Fall back to scanning the release list,
+    // which is paginated, rather than concluding there is nothing newer.
     connect(job, &NetJob::failed, this, [this, job](QString reason) {
         job->deleteLater();
+        emit logLine(tr("Could not look up Horizon's nightly release (%1); scanning the release list.").arg(reason));
+        scanPage(1);
+    });
+    job->start();
+}
+
+void HorizonUpdateTask::scanPage(int page)
+{
+    // The release list is newest-first but commonly led by many `launcher@x.y.z` entries, so a
+    // Nightly can be several pages down. Walk pages until one is found; the launch is never
+    // blocked if they run out.
+    if (page > kMaxReleasePages) {
+        emit logLine(tr("No Horizon nightly build was found in the newest %1 releases; starting the "
+                        "installed build.")
+                         .arg(kMaxReleasePages * kReleasesPerPage));
+        emitSucceeded();
+        return;
+    }
+
+    auto url = QUrl(QStringLiteral("%1?per_page=%2&page=%3")
+                        .arg(HorizonBuilds::kReleasesApi)
+                        .arg(kReleasesPerPage)
+                        .arg(page));
+    auto [request, response] = Net::Request::makeByteArray(url);
+
+    auto job = new NetJob(QStringLiteral("Horizon release scan"), APPLICATION->network());
+    job->addNetAction(request);
+    connect(job, &NetJob::succeeded, this, [this, response, job, page] {
+        job->deleteLater();
+        const auto doc = QJsonDocument::fromJson(*response);
+        if (!doc.isArray()) {
+            emitSucceeded();
+            return;
+        }
+        const auto releases = doc.array();
+        if (releases.isEmpty()) {
+            // Ran past the end of the list without finding a Nightly.
+            emit logLine(tr("No Horizon nightly build was found; starting the installed build."));
+            emitSucceeded();
+            return;
+        }
+
+        // Prefer the moving `nightly` tag when it is on the page: a dated `nightly-<date>` tag is
+        // deleted after seven days, so it must never become the pinned choice while `nightly`
+        // exists. Everything tagged `nightly*` is a real game-files release either way.
+        QString dated;
+        for (const auto& value : releases) {
+            const auto tag = value.toObject().value("tag_name").toString();
+            if (tag == HorizonBuilds::kNightlyTag) {
+                considerTag(tag);
+                return;
+            }
+            if (dated.isEmpty() && tag.startsWith(QStringLiteral("nightly")))
+                dated = tag;
+        }
+        if (!dated.isEmpty()) {
+            considerTag(dated);
+            return;
+        }
+        scanPage(page + 1);
+    });
+    connect(job, &NetJob::failed, this, [this, job, page](QString reason) {
+        job->deleteLater();
+        if (page < kMaxReleasePages) {
+            scanPage(page + 1);
+            return;
+        }
         emit logLine(tr("Could not check for a Horizon update (%1); starting the installed build.").arg(reason));
         emitSucceeded();
     });
     job->start();
+}
+
+void HorizonUpdateTask::considerTag(const QString& tag)
+{
+    if (tag == m_currentTag) {
+        emit logLine(tr("Horizon %1 is the newest build.").arg(tag));
+        emitSucceeded();
+        return;
+    }
+    if (HorizonBuilds::isComplete(HorizonBuilds::buildDir(tag))) {
+        // Already downloaded by an earlier launch or instance; just switch to it.
+        emit logLine(tr("Horizon %1 is already installed; using it.").arg(tag));
+        m_newTag = tag;
+        m_updated = true;
+        emitSucceeded();
+        return;
+    }
+
+    emit logLine(tr("A newer Horizon build is available: %1 (installed: %2). Updating…")
+                     .arg(tag, m_currentTag.isEmpty() ? tr("none") : m_currentTag));
+
+    auto* download = new HorizonDownloadTask(tag, m_parent);
+    connect(download, &HorizonDownloadTask::logLine, this, [this](QString line) { emit logLine(line); });
+    connect(download, &Task::succeeded, this, [this, download] {
+        m_newTag = download->installedTag();
+        m_updated = true;
+        download->deleteLater();
+        emitSucceeded();
+    });
+    connect(download, &Task::failed, this, [this, download](const QString& reason) {
+        download->deleteLater();
+        // A failed update must not stop the installed build from starting.
+        emit logLine(tr("The update failed (%1); starting the installed build instead.").arg(reason));
+        emitSucceeded();
+    });
+    download->start();
 }
 
 void HorizonUpdateTask::fail(const QString& reason)

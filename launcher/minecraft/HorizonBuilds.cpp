@@ -56,26 +56,60 @@ static QString exeName(const QString& base)
 #endif
 }
 
+QString rootOf(const QString& dir)
+{
+    if (dir.isEmpty() || !QDir(dir).exists())
+        return {};
+
+    // The archive is NOT flat. game-build.yml packs it with
+    //   7z a -tzip horizon-windows-x64.zip horizon-windows-x64
+    // so everything sits inside ONE top-level folder named after the archive, whose contents
+    // xtask's package() writes: horizon-client, horizon-ctl, horizon-prepare, horizon-server,
+    // exporters/, research-lock.json, tools/, crates/, LICENSE and PLAY.txt.
+    //
+    // Looking for horizon-client directly in <dir> is why a correct download reported "the
+    // archive did not contain horizon-client"; the binary was one level down. Both layouts are
+    // accepted so an archive that is ever packed flat still works.
+    const auto exe = exeName(QStringLiteral("horizon-client"));
+    if (QFileInfo::exists(FS::PathCombine(dir, exe)))
+        return dir;
+
+    const QDir parent(dir);
+    for (const auto& entry : parent.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        const auto nested = FS::PathCombine(dir, entry);
+        if (QFileInfo::exists(FS::PathCombine(nested, exe)))
+            return nested;
+    }
+    return dir;  // nothing found; callers check the individual files
+}
+
 QString clientPath(const QString& dir)
 {
-    const auto path = FS::PathCombine(dir, exeName(QStringLiteral("horizon-client")));
+    const auto root = rootOf(dir);
+    if (root.isEmpty())
+        return {};
+    const auto path = FS::PathCombine(root, exeName(QStringLiteral("horizon-client")));
     return QFileInfo::exists(path) ? path : QString();
 }
 
 QString preparePath(const QString& dir)
 {
-    const auto path = FS::PathCombine(dir, exeName(QStringLiteral("horizon-prepare")));
+    const auto root = rootOf(dir);
+    if (root.isEmpty())
+        return {};
+    const auto path = FS::PathCombine(root, exeName(QStringLiteral("horizon-prepare")));
     return QFileInfo::exists(path) ? path : QString();
 }
 
 bool isComplete(const QString& dir)
 {
-    if (dir.isEmpty())
+    const auto root = rootOf(dir);
+    if (root.isEmpty())
         return false;
-    // A build is only usable whole: the guide says client, preparer, research-lock.json and
-    // exporters/ work together, so half an unpack is not a build.
+    // A build is only usable whole: horizon-client cannot start without the resources the
+    // preparer makes, and the preparer reads exporters/manifest.json. See xtask package().
     return !clientPath(dir).isEmpty() && !preparePath(dir).isEmpty() &&
-           QFileInfo::exists(FS::PathCombine(dir, QStringLiteral("research-lock.json")));
+           QFileInfo::exists(FS::PathCombine(root, QStringLiteral("exporters"), QStringLiteral("manifest.json")));
 }
 
 QString newestInstalledTag()

@@ -42,6 +42,13 @@ QString buildsRoot();
 /// \brief The folder one tag is unpacked into: <dataRoot>/horizon/<tag>.
 QString buildDir(const QString& tag);
 
+/// \brief The folder that actually holds the programs.
+///
+/// The archive packs everything inside one top-level folder named after the archive
+/// (`7z a -tzip horizon-windows-x64.zip horizon-windows-x64`), so the real root is one level
+/// below the unpack folder. Both layouts are handled.
+QString rootOf(const QString& dir);
+
 /// \brief The client binary inside an unpacked build, or empty if it is not there.
 QString clientPath(const QString& buildDir);
 
