@@ -10,6 +10,10 @@
 
 #include "HorizonModFolderPage.h"
 
+// m_ui is only forward declared by ExternalResourcesPage.h; touching it needs the generated
+// header (as ModFolderPage.cpp does).
+#include "ui_ExternalResourcesPage.h"
+
 #include <QAction>
 #include <QIcon>
 #include <QMessageBox>
