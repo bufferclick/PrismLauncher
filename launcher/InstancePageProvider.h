@@ -1,12 +1,14 @@
 #pragma once
 #include <FileSystem.h>
 #include <ui/pages/instance/DataPackPage.h>
+#include "minecraft/HorizonInstance.h"
 #include "minecraft/MinecraftInstance.h"
 #include "ui/pages/BasePage.h"
 #include "ui/pages/BasePageProvider.h"
 #include "ui/pages/instance/InstanceSettingsPage.h"
 #include "ui/pages/instance/LogPage.h"
 #include "ui/pages/instance/ManagedPackPage.h"
+#include "ui/pages/instance/HorizonModFolderPage.h"
 #include "ui/pages/instance/ModFolderPage.h"
 #include "ui/pages/instance/NotesPage.h"
 #include "ui/pages/instance/OtherLogsPage.h"
@@ -30,8 +32,17 @@ class InstancePageProvider : protected QObject, public BasePageProvider {
         values.append(new LogPage(inst));
         values.append(new VersionPage(inst));
         values.append(ManagedPackPage::createPage(inst));
-        auto modsPage = new ModFolderPage(inst, inst->loaderModList());
-        modsPage->setFilter("%1 (*.zip *.jar *.litemod *.nilmod)");
+        ModFolderPage* modsPage = nullptr;
+        if (inst->instanceType() == HorizonInstance::typeString()) {
+            // Horizon mods are .hnmod (native, Rust) and .hmod (content), not Java jars, and
+            // native mods have to be compiled in by Horizon's launcher before Play does anything.
+            auto* horizonMods = new HorizonModFolderPage(static_cast<HorizonInstance*>(inst), inst->loaderModList());
+            horizonMods->setFilter("%1 (*.hnmod *.hmod *.hpack *.zip)");
+            modsPage = horizonMods;
+        } else {
+            modsPage = new ModFolderPage(inst, inst->loaderModList());
+            modsPage->setFilter("%1 (*.zip *.jar *.litemod *.nilmod)");
+        }
         values.append(modsPage);
         values.append(new CoreModFolderPage(inst, inst->coreModList()));
         values.append(new NilModFolderPage(inst, inst->nilModList()));

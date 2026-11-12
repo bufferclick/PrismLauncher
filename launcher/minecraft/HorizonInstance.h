@@ -78,4 +78,8 @@ class HorizonInstance : public MinecraftInstance {
 
     /// \brief Windows only: the usual install locations, for the "find it for me" path.
     static QString findInstalledHorizon();
+
+    /// \brief The Horizon launcher binary used to (re)build the game with this instance's mods.
+    ///        Horizon compiles .hnmod mods into the game; there is no in-game "apply" step.
+    QString horizonLauncher() const;
 };
