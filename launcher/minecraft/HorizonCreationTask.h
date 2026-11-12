@@ -28,6 +28,12 @@ class HorizonCreationTask final : public InstanceTask {
    public:
     HorizonCreationTask() = default;
 
+    /// \brief The one Minecraft version Horizon runs.
+    ///
+    /// Horizon is a native client built against a single game version, so an instance has no
+    /// version to choose. Bump this when Horizon supports a newer game version.
+    static QString gameVersion() { return QStringLiteral("26.3"); }
+
     void executeTask() override;
 
    private:
