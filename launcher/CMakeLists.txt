@@ -905,6 +905,8 @@ SET(LAUNCHER_SOURCES
     ui/pages/instance/ResourcePackPage.cpp
     ui/pages/instance/ShaderPackPage.h
     ui/pages/instance/ShaderPackPage.cpp
+    ui/pages/instance/HorizonModFolderPage.cpp
+    ui/pages/instance/HorizonModFolderPage.h
     ui/pages/instance/ModFolderPage.cpp
     ui/pages/instance/ModFolderPage.h
     ui/pages/instance/NotesPage.cpp

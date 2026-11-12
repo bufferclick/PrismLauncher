@@ -12,6 +12,7 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QMessageBox>
 #include <QFileInfo>
 #include <QLocale>
 #include <QStandardPaths>
@@ -46,6 +47,9 @@ class HorizonLaunchStep : public LaunchStep {
             const QString reason = tr("Horizon is not installed. Install it from Help → Horizon, "
                                      "or set the client path in this instance's settings.");
             emit logLine(reason, MessageLevel::Fatal);
+            // A plain emitFailed leaves the user staring at a dead window unless the console tab
+            // happens to open, so say it where the click happened.
+            QMessageBox::warning(nullptr, tr("Horizon is not installed"), reason);
             emitFailed(reason);
             return;
         }
@@ -177,6 +181,27 @@ QString HorizonInstance::horizonGameVersion() const
     return m_settings->get("HorizonGameVersion").toString();
 }
 
+QString HorizonInstance::horizonLauncher() const
+{
+    // The launcher (horizon-launcher.exe) is what compiles native mods; the client alone cannot.
+    // Prefer a launcher explicitly configured, then one sitting next to the client.
+    const auto client = horizonBinary();
+    if (!client.isEmpty()) {
+        const QFileInfo info(client);
+        for (const auto& name : { "horizon-launcher.exe", "horizon-launcher", "HorizonLauncher.exe" }) {
+            const auto sibling = FS::PathCombine(info.absolutePath(), name);
+            if (QFileInfo::exists(sibling))
+                return sibling;
+        }
+    }
+    for (const auto& exe : { "horizon-launcher", "horizon-launcher.exe" }) {
+        const auto found = QStandardPaths::findExecutable(exe);
+        if (!found.isEmpty())
+            return found;
+    }
+    return {};
+}
+
 QString HorizonInstance::getStatusbarDescription()
 {
     // Horizon instances have no components, so the base implementation would print
@@ -212,7 +237,7 @@ QString HorizonInstance::horizonBinary() const
         return configured;
 
     // A binary dropped into the instance folder wins, then whatever the install dialog found.
-    for (const auto& candidate : { "horizon.exe", "Horizon.exe", "horizon-launcher.exe", "horizon" }) {
+    for (const auto& candidate : { "horizon.exe", "Horizon.exe", "horizon-launcher.exe", "horizon-client.exe", "horizon" }) {
         const auto path = FS::PathCombine(instanceRoot(), candidate);
         if (QFileInfo::exists(path))
             return path;
@@ -229,6 +254,22 @@ bool HorizonInstance::isHorizonInstalled() const
 
 QString HorizonInstance::findInstalledHorizon()
 {
+    // First place to look: JL's own Horizon folder (Help -> Horizon installs there). This is
+    // where "Launch Horizon" put it, so an instance created afterwards finds it without the
+    // user having to point at anything.
+    {
+        const QDir jlDir(FS::PathCombine(APPLICATION->dataRoot(), QStringLiteral("horizon")));
+        if (jlDir.exists()) {
+            for (const auto& entry : jlDir.entryInfoList(QDir::Files | QDir::Executable)) {
+                const auto name = entry.fileName().toLower();
+                if (name.contains(QStringLiteral("horizon")) &&
+                    (name.endsWith(QStringLiteral(".exe")) || name.endsWith(QStringLiteral(".appimage")) || !name.contains('.'))) {
+                    return entry.absoluteFilePath();
+                }
+            }
+        }
+    }
+
 #if defined(Q_OS_WIN)
     // The Horizon launcher installs per-user; these are the locations its installer uses.
     const QStringList roots = { qEnvironmentVariable("LOCALAPPDATA"), qEnvironmentVariable("PROGRAMFILES"),
