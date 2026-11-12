@@ -19,6 +19,11 @@
 
 #include "Application.h"
 #include "FileSystem.h"
+#include "minecraft/HorizonBuilds.h"
+#include "minecraft/auth/AccountList.h"
+#include "minecraft/auth/AuthSession.h"
+#include "minecraft/auth/MinecraftAccount.h"
+#include "minecraft/HorizonResources.h"
 #include "MMCTime.h"
 #include "launch/LaunchTask.h"
 #include "LoggedProcess.h"
@@ -42,37 +47,68 @@ class HorizonLaunchStep : public LaunchStep {
 
     void executeTask() override
     {
-        const auto binary = m_instance->horizonBinary();
-        if (binary.isEmpty() || !QFileInfo::exists(binary)) {
-            const QString reason = tr("Horizon is not installed. Install it from Help → Horizon, "
-                                     "or set the client path in this instance's settings.");
+        const auto buildDir = m_instance->horizonBuildDir();
+        const auto client = HorizonBuilds::clientPath(buildDir);
+        if (client.isEmpty()) {
+            const QString reason =
+                tr("No Horizon build is installed. JL downloads one from Help → Horizon, or press "
+                   "Update on the instance to fetch the newest nightly.");
             emit logLine(reason, MessageLevel::Fatal);
-            // A plain emitFailed leaves the user staring at a dead window unless the console tab
-            // happens to open, so say it where the click happened.
-            QMessageBox::warning(nullptr, tr("Horizon is not installed"), reason);
+            QMessageBox::warning(nullptr, tr("No Horizon build"), reason);
             emitFailed(reason);
             return;
         }
 
-        auto* instanceSettings = m_instance->settings();
-        const auto dataDir = m_instance->horizonDataDir();
-        if (!FS::ensureFolderPathExists(dataDir)) {
-            const QString reason = tr("Could not create the Horizon data folder: %1").arg(dataDir);
+        const auto resources = m_instance->horizonResourcesDir();
+        if (resources.isEmpty()) {
+            const QString reason =
+                tr("Horizon's game resources have not been prepared for this build yet.\n\n"
+                   "Use Help → Horizon → Prepare, which turns your own copy of Minecraft into the "
+                   "files Horizon reads.");
+            emit logLine(reason, MessageLevel::Fatal);
+            QMessageBox::warning(nullptr, tr("Horizon is not prepared"), reason);
+            emitFailed(reason);
+            return;
+        }
+
+        const auto gameDir = m_instance->horizonDataDir();
+        if (!FS::ensureFolderPathExists(gameDir)) {
+            const QString reason = tr("Could not create the Horizon game folder: %1").arg(gameDir);
             emit logLine(reason, MessageLevel::Fatal);
             emitFailed(reason);
             return;
         }
 
-        emit logLine(tr("Starting Horizon: %1").arg(binary), MessageLevel::Launcher);
-        emit logLine(tr("Data folder: %1").arg(dataDir), MessageLevel::Launcher);
+        // Per Horizon's Launch API: one folder per instance, the account's session on stdin,
+        // never a token on the command line.
+        QStringList args{ "--resources", resources, "--game-dir", gameDir, "--home", gameDir };
+
+        // Only options the build lists are accepted (anything else exits 2), so the window size
+        // and fullscreen flags are passed only when the instance actually sets them.
+        if (auto geometry = m_instance->settings()->get("HorizonGeometry").toString(); !geometry.isEmpty())
+            args << QProcess::splitCommand(geometry);
+
+        const auto session = m_instance->horizonSessionJson();
+        if (session.isEmpty()) {
+            emit logLine(tr("No Microsoft account is available; Horizon will start signed out."), MessageLevel::Warning);
+        } else {
+            args << "--session-stdin";
+        }
+
+        emit logLine(tr("Horizon build: %1").arg(buildDir), MessageLevel::Launcher);
+        emit logLine(tr("Resources: %1").arg(resources), MessageLevel::Launcher);
+        emit logLine(tr("Game folder: %1").arg(gameDir), MessageLevel::Launcher);
 
         m_process.setDetachable(true);
         m_process.setProcessEnvironment(m_instance->createLaunchEnvironment());
-        m_process.setWorkingDirectory(dataDir);
+        m_process.setWorkingDirectory(buildDir);
+        m_process.start(client, args);
 
-        // Horizon accepts extra arguments; split the stored string the way a shell would.
-        const auto args = QProcess::splitCommand(instanceSettings->get("HorizonArgs").toString());
-        m_process.start(binary, args);
+        if (!session.isEmpty() && m_process.waitForStarted(5000)) {
+            // Write and close: the game reads the session once.
+            m_process.write(session.toUtf8());
+            m_process.closeWriteChannel();
+        }
     }
 
     bool abort() override
@@ -103,13 +139,26 @@ class HorizonLaunchStep : public LaunchStep {
                 m_parent->setPid(-1);
                 m_parent->instance()->setMinecraftRunning(false);
                 emit logLine(tr("Horizon exited with code %1.").arg(exitCode), MessageLevel::Launcher);
-                // Same rule as a Java instance: a non-zero exit is a crash, not a quiet quit.
-                if (exitCode != 0) {
-                    emitFailed(tr("Horizon crashed (exit code %1).").arg(exitCode));
-                    return;
+                // Horizon's documented exit codes: 0 quit, 1 stopped on an error, 2 refused
+                // command line, 101 panicked.
+                switch (exitCode) {
+                    case 0:
+                        emitSucceeded();
+                        return;
+                    case 2:
+                        emitFailed(tr("Horizon refused the command line. This is a bug in JL; the "
+                                      "console above names the option."));
+                        return;
+                    case 101:
+                        emitFailed(tr("Horizon panicked. Its crash report path is on the last line "
+                                      "of the console above."));
+                        return;
+                    default:
+                        emitFailed(tr("Horizon stopped on an error (exit code %1). Its crash report "
+                                      "path is in the console above.")
+                                       .arg(exitCode));
+                        return;
                 }
-                emitSucceeded();
-                return;
             }
             case LoggedProcess::Running:
                 emit logLine(tr("Horizon process ID: %1").arg(m_process.processId()), MessageLevel::Launcher);
@@ -127,6 +176,51 @@ class HorizonLaunchStep : public LaunchStep {
 };
 
 // ---------------------------------------------------------------------------------------
+// Launch step: keep the build current, then run it.
+// ---------------------------------------------------------------------------------------
+
+class HorizonUpdateStep : public LaunchStep {
+    Q_OBJECT
+
+   public:
+    HorizonUpdateStep(LaunchTask* parent, HorizonInstance* instance) : LaunchStep(parent), m_instance(instance) {}
+
+    void executeTask() override
+    {
+        if (!m_instance->settings()->get("HorizonAutoUpdate").toBool()) {
+            emitSucceeded();
+            return;
+        }
+
+        const auto current = QFileInfo(m_instance->horizonBuildDir()).fileName();
+        auto* task = new HorizonUpdateTask(current, nullptr);
+        connect(task, &HorizonUpdateTask::logLine, this,
+                [this](const QString& line) { emit logLine(line, MessageLevel::Launcher); });
+        connect(task, &Task::succeeded, this, [this, task] {
+            if (task->updated()) {
+                // Point the instance at what was just installed, oldest build left on disk.
+                m_instance->settings()->set("HorizonBuildTag", task->installedTag());
+                emit logLine(tr("Horizon updated to %1.").arg(task->installedTag()), MessageLevel::Launcher);
+            }
+            task->deleteLater();
+            emitSucceeded();
+        });
+        connect(task, &Task::failed, this, [this, task](const QString& reason) {
+            task->deleteLater();
+            // Never block a launch because a check failed; the installed build is still there.
+            emit logLine(tr("Horizon update skipped: %1").arg(reason), MessageLevel::Warning);
+            emitSucceeded();
+        });
+        task->start();
+    }
+
+    bool abort() override { return true; }
+
+   private:
+    HorizonInstance* m_instance;
+};
+
+// ---------------------------------------------------------------------------------------
 // Launch task
 // ---------------------------------------------------------------------------------------
 
@@ -139,6 +233,9 @@ std::unique_ptr<HorizonLaunchTask> HorizonLaunchTask::create(HorizonInstance* in
     // directly here (its ctor is protected), so init() has to be called by hand. Without it the
     // instance is never marked as running and the UI stays on "Launch".
     task->init();
+    // Update first, then run: Horizon publishes several builds a day, and the user asked for the
+    // newest one on every start. The step never fails the launch.
+    task->appendStep(shared_qobject_ptr<LaunchStep>(new HorizonUpdateStep(task.get(), inst)));
     task->appendStep(shared_qobject_ptr<LaunchStep>(new HorizonLaunchStep(task.get(), inst)));
     return task;
 }
@@ -156,9 +253,14 @@ HorizonInstance::HorizonInstance(SettingsObject* globalSettings, std::unique_ptr
         m_settings->registerSetting("InstanceType", QString());
     m_settings->set("InstanceType", typeString());
 
-    m_settings->registerSetting("HorizonBinary", QString());
+    m_settings->registerSetting("HorizonBuildTag", QString());
+    m_settings->registerSetting("HorizonResources", QString());
+    m_settings->registerSetting("HorizonGeometry", QString());
     m_settings->registerSetting("HorizonArgs", QString());
     m_settings->registerSetting("HorizonGameVersion", QString());
+    // Checked on every launch; the build is replaced when GitHub has a newer one.
+    m_settings->registerSetting("HorizonAutoUpdate", true);
+    m_settings->registerSetting("HorizonLastChecked", QString());
 }
 
 void HorizonInstance::loadSpecificSettings()
@@ -183,23 +285,26 @@ QString HorizonInstance::horizonGameVersion() const
 
 QString HorizonInstance::horizonLauncher() const
 {
-    // The launcher (horizon-launcher.exe) is what compiles native mods; the client alone cannot.
-    // Prefer a launcher explicitly configured, then one sitting next to the client.
-    const auto client = horizonBinary();
+    // Native mods are compiled into the game by horizon-launcher, which is a SEPARATE download
+    // from the game files. Per Horizon's own guide, the game archive (horizon-windows-x64.zip)
+    // only contains horizon-client, horizon-prepare, research-lock.json and exporters/.
+    // If the user got horizon-launcher from playhorizon.dev it may sit next to the client, on
+    // PATH, or in JL's own horizon folder.
+    const auto client = HorizonBuilds::clientPath(horizonBuildDir());
     if (!client.isEmpty()) {
         const QFileInfo info(client);
-        for (const auto& name : { "horizon-launcher.exe", "horizon-launcher", "HorizonLauncher.exe" }) {
+        for (const auto& name : { "horizon-launcher.exe", "horizon-launcher" }) {
             const auto sibling = FS::PathCombine(info.absolutePath(), name);
             if (QFileInfo::exists(sibling))
                 return sibling;
         }
     }
-    for (const auto& exe : { "horizon-launcher", "horizon-launcher.exe" }) {
-        const auto found = QStandardPaths::findExecutable(exe);
-        if (!found.isEmpty())
-            return found;
+    for (const auto& name : { "horizon-launcher.exe", "horizon-launcher" }) {
+        const auto candidate = FS::PathCombine(HorizonBuilds::buildsRoot(), name);
+        if (QFileInfo::exists(candidate))
+            return candidate;
     }
-    return {};
+    return QStandardPaths::findExecutable(QStringLiteral("horizon-launcher"));
 }
 
 QString HorizonInstance::getStatusbarDescription()
@@ -230,83 +335,53 @@ QString HorizonInstance::getStatusbarDescription()
     return description;
 }
 
-QString HorizonInstance::horizonBinary() const
+QString HorizonInstance::horizonBuildDir() const
 {
-    const auto configured = m_settings->get("HorizonBinary").toString();
-    if (!configured.isEmpty())
-        return configured;
-
-    // A binary dropped into the instance folder wins, then whatever the install dialog found.
-    for (const auto& candidate : { "horizon.exe", "Horizon.exe", "horizon-launcher.exe", "horizon-client.exe", "horizon" }) {
-        const auto path = FS::PathCombine(instanceRoot(), candidate);
-        if (QFileInfo::exists(path))
-            return path;
+    // Explicitly pinned build, else the newest one JL has unpacked.
+    if (const auto pinned = m_settings->get("HorizonBuildTag").toString(); !pinned.isEmpty()) {
+        const auto dir = HorizonBuilds::buildDir(pinned);
+        if (HorizonBuilds::isComplete(dir))
+            return dir;
     }
-
-    return findInstalledHorizon();
+    return HorizonBuilds::buildDir(HorizonBuilds::newestInstalledTag());
 }
 
-bool HorizonInstance::isHorizonInstalled() const
+QString HorizonInstance::horizonResourcesDir() const
 {
-    const auto binary = horizonBinary();
-    return !binary.isEmpty() && QFileInfo::exists(binary);
-}
-
-QString HorizonInstance::findInstalledHorizon()
-{
-    // First place to look: JL's own Horizon folder (Help -> Horizon installs there). This is
-    // where "Launch Horizon" put it, so an instance created afterwards finds it without the
-    // user having to point at anything.
-    {
-        const QDir jlDir(FS::PathCombine(APPLICATION->dataRoot(), QStringLiteral("horizon")));
-        if (jlDir.exists()) {
-            for (const auto& entry : jlDir.entryInfoList(QDir::Files | QDir::Executable)) {
-                const auto name = entry.fileName().toLower();
-                if (name.contains(QStringLiteral("horizon")) &&
-                    (name.endsWith(QStringLiteral(".exe")) || name.endsWith(QStringLiteral(".appimage")) || !name.contains('.'))) {
-                    return entry.absoluteFilePath();
-                }
-            }
-        }
-    }
-
-#if defined(Q_OS_WIN)
-    // The Horizon launcher installs per-user; these are the locations its installer uses.
-    const QStringList roots = { qEnvironmentVariable("LOCALAPPDATA"), qEnvironmentVariable("PROGRAMFILES"),
-                                qEnvironmentVariable("PROGRAMFILES(X86)"), qEnvironmentVariable("APPDATA") };
-    const QStringList names = { "Horizon", "horizon", "Horizon Launcher", "horizon-launcher" };
-    const QStringList exes = { "horizon.exe", "Horizon.exe", "horizon-launcher.exe" };
-
-    for (const auto& root : roots) {
-        if (root.isEmpty())
-            continue;
-        for (const auto& name : names) {
-            const QDir base(FS::PathCombine(root, name));
-            if (!base.exists())
-                continue;
-            for (const auto& exe : exes) {
-                const auto direct = base.absoluteFilePath(exe);
-                if (QFileInfo::exists(direct))
-                    return direct;
-            }
-            // One level of nesting is common ("Horizon/app/horizon.exe").
-            for (const auto& sub : base.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-                for (const auto& exe : exes) {
-                    const auto nested = base.absoluteFilePath(sub + "/" + exe);
-                    if (QFileInfo::exists(nested))
-                        return nested;
-                }
-            }
-        }
-    }
-#endif
-    // Fall back to PATH.
-    for (const auto& exe : { "horizon", "horizon-launcher" }) {
-        const auto found = QStandardPaths::findExecutable(exe);
-        if (!found.isEmpty())
-            return found;
-    }
+    const auto dir = m_settings->get("HorizonResources").toString();
+    if (dir.isEmpty())
+        return {};
+    // Horizon's own "--check" is what decides whether resources are usable; a folder that is
+    // merely present may be half-prepared, so only trust one the check passed for.
+    if (QFileInfo::exists(FS::PathCombine(dir, QStringLiteral("research-lock.json"))))
+        return dir;
     return {};
+}
+
+QString HorizonInstance::horizonSessionJson() const
+{
+    // Horizon wants the owner's own Microsoft session: name, uuid, access_token, user_type.
+    auto* accounts = APPLICATION->accounts();
+    if (!accounts || !accounts->defaultAccount())
+        return {};
+    const auto account = accounts->defaultAccount();
+    if (!account->ownsMinecraft())
+        return {};
+
+    const auto session = std::make_shared<AuthSession>();
+    account->fillSession(session);
+    if (session->access_token.isEmpty())
+        return {};
+
+    // uuid without dashes, as the Launch API example shows.
+    const auto uuid = QString(session->uuid).remove('-');
+    return QStringLiteral(R"({"name":"%1","uuid":"%2","access_token":"%3","user_type":"msa"})")
+        .arg(session->player_name, uuid, session->access_token);
+}
+
+bool HorizonInstance::isHorizonReady() const
+{
+    return !HorizonBuilds::clientPath(horizonBuildDir()).isEmpty() && !horizonResourcesDir().isEmpty();
 }
 
 LaunchTask* HorizonInstance::createLaunchTask(AuthSessionPtr, MinecraftTarget::Ptr)

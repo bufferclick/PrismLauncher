@@ -13,6 +13,8 @@
 #include <QDir>
 
 #include "FileSystem.h"
+#include "minecraft/HorizonBuilds.h"
+#include "minecraft/HorizonResources.h"
 #include "minecraft/PackProfile.h"
 #include "settings/INISettingsObject.h"
 #include "settings/SettingsObject.h"
@@ -41,9 +43,10 @@ void HorizonCreationTask::executeTask()
         // value written when the Lock is released is the Horizon one.
         m_instance->settings()->set("InstanceType", HorizonInstance::typeString());
 
-        // Point at the installed client so the first launch works without extra setup.
-        if (const auto binary = HorizonInstance::findInstalledHorizon(); !binary.isEmpty())
-            m_instance->settings()->set("HorizonBinary", binary);
+        // Run whichever build JL has unpacked. Empty means "newest installed", which is what a
+        // fresh instance wants: the download below fills it in.
+        m_instance->settings()->set("HorizonBuildTag", HorizonBuilds::newestInstalledTag());
+        m_instance->settings()->set("HorizonResources", HorizonResources::newestPrepared());
 
         // Remembered so the instance can say which game version it belongs to without asking.
         m_instance->settings()->set("HorizonGameVersion", gameVersion());
@@ -58,5 +61,49 @@ void HorizonCreationTask::executeTask()
         }
     }
 
-    emitSucceeded();
+    // Everything the instance needs on disk exists; now make sure Horizon itself does too, so
+    // the first Launch works instead of sending the user off to install something.
+    m_createSucceeded = true;
+    downloadHorizon();
+}
+
+void HorizonCreationTask::downloadHorizon()
+{
+    if (HorizonBuilds::isComplete(HorizonBuilds::buildDir(HorizonBuilds::newestInstalledTag()))) {
+        // Already installed and current enough; the launch step updates it if there is a newer one.
+        setStatus(tr("Horizon is already installed"));
+        finishCreation();
+        return;
+    }
+
+    setStatus(tr("Downloading Horizon"));
+    auto* task = new HorizonDownloadTask(QString(), nullptr);
+    connect(task, &HorizonDownloadTask::logLine, this, [this](const QString& line) { logWarning(line); });
+    connect(task, &Task::succeeded, this, [this, task] {
+        const auto tag = task->installedTag();
+        task->deleteLater();
+        setStatus(tr("Horizon %1 downloaded").arg(tag));
+
+        const SettingsObject::Lock lock(m_instance->settings());
+        m_instance->settings()->set("HorizonBuildTag", tag);
+        // A fresh build has no prepared resources until horizon-prepare has run; leave the field
+        // empty rather than pointing at another build's folder.
+        m_instance->settings()->set("HorizonResources", HorizonResources::newestPrepared());
+        finishCreation();
+    });
+    connect(task, &Task::failed, this, [this, task](const QString& reason) {
+        task->deleteLater();
+        // The instance itself is usable and Horizon can be fetched later from Help → Horizon; a
+        // failed download must not throw away the instance the user just asked for.
+        logWarning(tr("Horizon could not be downloaded: %1").arg(reason));
+        finishCreation();
+    });
+    task->start();
+}
+
+void HorizonCreationTask::finishCreation()
+{
+    if (m_createSucceeded) {
+        emitSucceeded();
+    }
 }

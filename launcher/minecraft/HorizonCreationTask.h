@@ -16,11 +16,12 @@
 #include "minecraft/HorizonInstance.h"
 
 /**
- * Creates a Horizon instance.
+ * Creates a Horizon instance, and installs Horizon itself if it is not there yet.
  *
- * Unlike VanillaCreationTask this downloads nothing: Horizon is a separate program that the
- * user installs (Help → Horizon) and that reads its own prepared game data. The instance only
- * needs an instance.cfg, a folder layout and a pointer at the client.
+ * Creating an instance is the moment the user expects everything to be in place, so this
+ * downloads Horizon's game files (the platform archive from its GitHub release) before the
+ * instance is handed back. No folder is opened, no installer is run, and no separate trip to
+ * Help → Horizon is needed.
  */
 class HorizonCreationTask final : public InstanceTask {
     Q_OBJECT
@@ -37,5 +38,9 @@ class HorizonCreationTask final : public InstanceTask {
     void executeTask() override;
 
    private:
+    void downloadHorizon();
+    void finishCreation();
+
     std::unique_ptr<HorizonInstance> m_instance;
+    bool m_createSucceeded = false;
 };

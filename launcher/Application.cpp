@@ -734,6 +734,10 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // Language
         m_settings->registerSetting("Language", QString());
         m_settings->registerSetting("UseSystemLocale", false);
+        // Set the first time startup finishes without needing the wizard. "Language" alone is
+        // not a reliable signal: it is only written after a translations index download, so on a
+        // fresh settings file it stays empty and used to send every launch back into the wizard.
+        m_settings->registerSetting("SetupCompleted", false);
 
         // Console
         m_settings->registerSetting("ShowConsole", false);
@@ -1248,6 +1252,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     // the setup wizard applies the selected theme itself before it is shown
     if (!createSetupWizard()) {
         m_themeManager->applyCurrentlySelectedTheme(true);
+        // Reaching this point without the wizard means there was nothing to set up. Record it so
+        // later launches skip the checks entirely and open the instance window straight away.
+        m_settings->set("SetupCompleted", true);
     }
     registerStartMenuEntry();
     performMainStartupAction();
@@ -1263,6 +1270,10 @@ bool Application::createSetupWizard()
         if (ignoreJavaWizard) {
             return false;
         }
+        // A configured Java is proof enough that the java page has nothing to add.
+        if (settings()->get("SetupCompleted").toBool() && !FS::ResolveExecutable(settings()->get("JavaPath").toString()).isNull()) {
+            return false;
+        }
         QString currentHostName = QHostInfo::localHostName();
         QString oldHostName = settings()->get("LastHostname").toString();
         if (currentHostName != oldHostName) {
@@ -1275,11 +1286,17 @@ bool Application::createSetupWizard()
     }();
     bool askjava = BuildConfig.JAVA_DOWNLOADER_ENABLED && !javaRequired && !settings()->get("AutomaticJavaDownload").toBool() &&
                    !settings()->get("AutomaticJavaSwitch").toBool() && !settings()->get("UserAskedAboutAutomaticJavaDownload").toBool();
-    bool languageRequired = settings()->get("Language").toString().isEmpty();
+    // If startup has completed once, the user has a working configuration and asked to go
+    // straight to the instances window; the wizard is available from Help instead.
+    const bool setupAlreadyDone = settings()->get("SetupCompleted").toBool();
+    bool languageRequired = !setupAlreadyDone && settings()->get("Language").toString().isEmpty();
     bool pasteInterventionRequired = settings()->get("PastebinURL") != "";
     bool validWidgets = m_themeManager->isValidApplicationTheme(settings()->get("ApplicationTheme").toString());
     bool validIcons = m_themeManager->isValidIconTheme(settings()->get("IconTheme").toString());
-    bool login = !m_accounts->anyAccountIsValid() && (capabilities().testAnyFlags(Application::SupportsMSA));
+    // Only a genuinely fresh install asks for an account; after that the account list is the
+    // user's business, and offline players never sign in at all.
+    bool login = !setupAlreadyDone && !m_accounts->anyAccountIsValid() &&
+                 (capabilities().testAnyFlags(Application::SupportsMSA));
     bool themeInterventionRequired = !validWidgets || !validIcons;
     bool wizardRequired = javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login;
     if (wizardRequired) {
