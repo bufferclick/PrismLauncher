@@ -167,13 +167,17 @@ void CustomPage::updateLoaderUi()
 {
     const bool horizon = m_ui->horizonFilter->isChecked();
 
-    // With Horizon there is nothing to choose, so the version picker, the separator and the
-    // loader picker are all hidden and the summary takes their place.
+    // With Horizon there is nothing to choose, so the Minecraft version picker, its filter
+    // column, the separator and the loader build list are hidden and the summary takes their
+    // place. loaderChoiceGroup stays visible: it holds the Fabric/Horizon radios, so hiding it
+    // would hide the only control that can switch back to Fabric.
     m_ui->minecraftGroup->setVisible(!horizon);
     m_ui->loaderLine->setVisible(!horizon);
-    m_ui->loaderGroup->setVisible(!horizon);
+    m_ui->loaderVersionGroup->setVisible(!horizon);
     m_ui->horizonSummary->setVisible(horizon);
     m_ui->browseFabricButton->setVisible(!horizon);
+    m_ui->loaderLabel->setVisible(!horizon);
+    m_ui->loaderRefreshBtn->setVisible(!horizon);
 
     m_ui->horizonVersionLabel->setText(tr("Minecraft %1").arg(HorizonCreationTask::gameVersion()));
 

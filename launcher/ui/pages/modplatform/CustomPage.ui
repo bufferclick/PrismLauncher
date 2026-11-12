@@ -214,21 +214,26 @@
        </item>
        <item>
         <widget class="QWidget" name="loaderGroup">
-         <layout class="QVBoxLayout" name="loaderGroupLayout">
-         <item>
-          <layout class="QHBoxLayout" name="loaderLayout">
-           <item>
-            <widget class="VersionSelectWidget" name="loaderVersionList" native="true">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <layout class="QVBoxLayout" name="verticalLayout_2">
+         <layout class="QHBoxLayout" name="loaderGroupLayout">
+          <item>
+           <widget class="QWidget" name="loaderVersionGroup">
+            <layout class="QVBoxLayout" name="loaderVersionGroupLayout">
+             <item>
+              <widget class="VersionSelectWidget" name="loaderVersionList" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QWidget" name="loaderChoiceGroup">
+            <layout class="QVBoxLayout" name="loaderChoiceGroupLayout">
              <item>
               <widget class="QLabel" name="loaderLabel">
                <property name="text">
@@ -289,9 +294,8 @@
               </widget>
              </item>
             </layout>
-           </item>
-          </layout>
-         </item>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
