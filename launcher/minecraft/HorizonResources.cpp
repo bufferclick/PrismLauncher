@@ -17,6 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QUrl>
 
 #include "Application.h"
 #include "FileSystem.h"
@@ -251,6 +252,34 @@ void HorizonPrepareTask::executeTask()
         return;
     }
 
+    // The preparer needs a version JSON. JL only keeps one for a version an instance actually
+    // installed, so fetch it from Mojang rather than sending anyone off to play 26.3 elsewhere.
+    const auto version = minecraftVersionForPrepare(m_outputDir);
+    const auto locateNow = [this, version] { return HorizonMinecraftFiles::locate(nullptr, version); };
+    if (locateNow().versionJson.isEmpty()) {
+        const auto target = FS::PathCombine(FS::PathCombine(QDir::current().absolutePath(), QStringLiteral("meta")),
+                                           QStringLiteral("net.minecraft"), version + QStringLiteral(".json"));
+        auto* json = new HorizonVersionJsonTask(version, target);
+        connect(json, &HorizonVersionJsonTask::logLine, this, [this](const QString& line) { emit logLine(line); });
+        connect(json, &Task::succeeded, this, [this, json] {
+            json->deleteLater();
+            fetchServerJarThenPrepare();
+        });
+        connect(json, &Task::failed, this, [this, json](const QString& reason) {
+            json->deleteLater();
+            emit logLine(tr("Could not fetch the version file: %1").arg(reason));
+            // Still try: Horizon may find the files itself in one of the three launchers it knows.
+            fetchServerJarThenPrepare();
+        });
+        json->start();
+        return;
+    }
+
+    fetchServerJarThenPrepare();
+}
+
+void HorizonPrepareTask::fetchServerJarThenPrepare()
+{
     // The first prepare of a version also needs the server jar, which Horizon never fetches.
     // Do that first so the run is not wasted on a missing file.
     const auto files = HorizonMinecraftFiles::locate(nullptr, minecraftVersionForPrepare(m_outputDir));
@@ -299,9 +328,10 @@ void HorizonPrepareTask::startPreparer()
             args << QStringLiteral("--server-jar") << serverJarPath();
         emit logLine(tr("Reading your Minecraft files from %1").arg(files.versionJson));
     } else {
-        emit logLine(tr("JL could not find its own copy of Minecraft %1. Horizon will search its own "
-                        "list of launchers and may ask you to play the version once elsewhere. Looked for: %2")
-                         .arg(files.version, files.searched.join(QStringLiteral("; "))));
+        emit logLine(tr("JL could not find its own copy of Minecraft %1 (%2). Horizon only searches "
+                        "the official launcher, ATLauncher and the CurseForge app, so it will ask you "
+                        "to play the version once in one of those.")
+                         .arg(files.version, HorizonMinecraftFiles::explain(files)));
     }
 
     m_process->setArguments(args);
@@ -578,6 +608,67 @@ void HorizonServerJarTask::executeTask()
         // pretend the whole install failed.
         emit logLine(tr("Could not download the server jar: %1").arg(reason));
         emitSucceeded();
+    });
+    job->start();
+}
+
+// ---------------------------------------------------------------------------------------
+// The version JSON, when JL has never downloaded this version
+// ---------------------------------------------------------------------------------------
+
+HorizonVersionJsonTask::HorizonVersionJsonTask(QString minecraftVersion, QString outputPath)
+    : m_version(std::move(minecraftVersion)), m_outputPath(std::move(outputPath))
+{}
+
+void HorizonVersionJsonTask::executeTask()
+{
+    if (QFileInfo::exists(m_outputPath)) {
+        emitSucceeded();
+        return;
+    }
+
+    setStatus(tr("Looking up Minecraft %1…").arg(m_version));
+
+    // Mojang's manifest: every released version with the URL of its own JSON.
+    auto [request, response] = Net::Request::makeByteArray(QUrl(QStringLiteral("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")));
+    auto job = new NetJob(QStringLiteral("Minecraft version manifest"), APPLICATION->network());
+    job->addNetAction(request);
+
+    connect(job, &NetJob::succeeded, this, [this, response, job] {
+        job->deleteLater();
+        const auto doc = QJsonDocument::fromJson(*response);
+        const auto versions = doc.object().value(QStringLiteral("versions")).toArray();
+        QString url;
+        for (const auto& value : versions) {
+            const auto entry = value.toObject();
+            if (entry.value(QStringLiteral("id")).toString() != m_version)
+                continue;
+            url = entry.value(QStringLiteral("url")).toString();
+            break;
+        }
+        if (url.isEmpty()) {
+            emitFailed(tr("Mojang has no release called %1.").arg(m_version));
+            return;
+        }
+
+        emit logLine(tr("Downloading Minecraft %1's version file from Mojang").arg(m_version));
+        FS::ensureFolderPathExists(QFileInfo(m_outputPath).absolutePath());
+
+        auto* fetch = new NetJob(QStringLiteral("Minecraft version file"), APPLICATION->network());
+        fetch->addNetAction(Net::Request::makeFile(QUrl(url), m_outputPath));
+        connect(fetch, &NetJob::succeeded, this, [this, fetch] {
+            fetch->deleteLater();
+            emitSucceeded();
+        });
+        connect(fetch, &NetJob::failed, this, [this, fetch](QString reason) {
+            fetch->deleteLater();
+            emitFailed(tr("Could not download Minecraft %1's version file: %2").arg(m_version, reason));
+        });
+        fetch->start();
+    });
+    connect(job, &NetJob::failed, this, [this, job](QString reason) {
+        job->deleteLater();
+        emitFailed(tr("Could not reach Mojang's version list: %1").arg(reason));
     });
     job->start();
 }

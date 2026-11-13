@@ -11,7 +11,9 @@
 #include "HorizonDialog.h"
 
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QProgressBar>
@@ -215,20 +217,35 @@ void HorizonDialog::chooseMinecraftFolder()
         return;
 
     APPLICATION->settings()->set("HorizonMinecraftDir", dir);
-    appendLog(tr("Minecraft files will be read from %1").arg(dir));
 
-    // Say straight away whether that folder really has what the preparer needs.
     const auto files = HorizonMinecraftFiles::locate(nullptr, QStringLiteral("26.3"));
     if (files.complete()) {
-        appendLog(tr("Found %1").arg(files.versionJson));
-        m_status->setText(tr("<b>Using Minecraft files from %1.</b> Press “Prepare game files”.")
-                              .arg(dir));
-    } else {
-        appendLog(tr("That folder is missing: %1").arg(files.searched.join(QStringLiteral("; "))));
-        m_status->setText(tr("<b>%1 does not look like a Minecraft folder.</b> It needs a version "
-                             "JSON, the client jar, libraries/ and assets/.")
-                              .arg(dir));
+        appendLog(tr("Using Minecraft files from %1").arg(files.versionJson));
+        m_status->setText(tr("<b>Using Minecraft files from %1.</b> Press “Prepare game files”.").arg(dir));
+        return;
     }
+
+    // Say WHY, in terms of what the folder is. "versions/x/y.json; libraries; assets" is noise;
+    // "that is a modpack instance, point me at the data root" is the answer.
+    appendLog(tr("That folder is missing: %1").arg(HorizonMinecraftFiles::explain(files)));
+
+    // A CurseForge/Prism/MultiMC instance folder holds one instance's own files and never the
+    // shared version JSON, libraries or assets, so it can never satisfy the preparer.
+    const bool looksLikeInstance = QFileInfo::exists(FS::PathCombine(dir, QStringLiteral("minecraftinstance.json"))) ||
+                                   QFileInfo::exists(FS::PathCombine(dir, QStringLiteral("instance.cfg")));
+    if (looksLikeInstance) {
+        m_status->setText(tr("<b>%1 is a single instance, not a Minecraft installation.</b><br><br>"
+                             "It has no version file, libraries or assets of its own — those live "
+                             "beside the launcher's data, shared by every instance. JL keeps them "
+                             "in <code>%2</code>, which it uses automatically.<br><br>"
+                             "Clear this folder to use JL's own copy.")
+                              .arg(dir, QDir::current().absolutePath()));
+        return;
+    }
+
+    m_status->setText(tr("<b>%1 is not a Minecraft folder.</b> It needs a version file, "
+                         "libraries/ and assets/.")
+                          .arg(dir));
 }
 
 void HorizonDialog::openProjectPage()

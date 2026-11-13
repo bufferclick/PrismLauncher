@@ -186,7 +186,7 @@ set(Launcher_LEGACY_FMLLIBS_BASE_URL "https://files.prismlauncher.org/fmllibs/" 
 ######## Set version numbers ########
 set(Launcher_VERSION_MAJOR 0)
 set(Launcher_VERSION_MINOR 0)
-set(Launcher_VERSION_PATCH 9)
+set(Launcher_VERSION_PATCH 10)
 
 # Data folder of Prism Launcher. JL offers to import it on first start.
 set(Launcher_PrismDataFolder "PrismLauncher" CACHE STRING "Name of Prism Launcher's data folder, used for the first-run instance import.")

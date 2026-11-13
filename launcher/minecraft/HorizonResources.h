@@ -142,6 +142,30 @@ class HorizonServerJarTask : public Task {
 };
 
 /**
+ * Makes sure JL has the vanilla version JSON for a Minecraft version.
+ *
+ * The preparer needs a version JSON, and JL only keeps one for versions an instance has
+ * actually installed. Rather than tell someone to go play 26.3 in another launcher, this asks
+ * Mojang's version manifest for the version and saves it where JL reads meta from, so the rest
+ * of the pipeline works from JL's own copy.
+ */
+class HorizonVersionJsonTask : public Task {
+    Q_OBJECT
+
+   public:
+    explicit HorizonVersionJsonTask(QString minecraftVersion, QString outputPath);
+
+    void executeTask() override;
+
+   signals:
+    void logLine(QString line);
+
+   private:
+    QString m_version;
+    QString m_outputPath;
+};
+
+/**
  * Runs horizon-prepare to build the resources horizon-client reads.
  *
  * This is the step Horizon will not do without: it needs the player's own Minecraft files and a
@@ -160,6 +184,7 @@ class HorizonPrepareTask : public Task {
     void logLine(QString line);
 
    private:
+    void fetchServerJarThenPrepare();
     void startPreparer();
     QString serverJarPath() const;
     void onReadyRead();
