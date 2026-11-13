@@ -38,8 +38,12 @@ class MinecraftInstance;
 namespace HorizonMinecraftFiles {
 
 struct Located {
-    /// \brief True when every path below was found.
-    bool complete() const { return !versionJson.isEmpty() && !clientJar.isEmpty() && !librariesDir.isEmpty() && !assetsDir.isEmpty(); }
+    /// \brief True when enough was found for the preparer to run.
+    ///
+    /// The client jar is NOT required: Prism downloads the vanilla client through its meta cache
+    /// and does not keep a <version>.jar beside the JSON, and horizon-prepare can take the jar
+    /// from the version JSON's own downloads. Version JSON, libraries and assets are required.
+    bool complete() const { return !versionJson.isEmpty() && !librariesDir.isEmpty() && !assetsDir.isEmpty(); }
 
     QString versionJson;
     QString clientJar;
@@ -59,5 +63,8 @@ Located locate(MinecraftInstance* instance, const QString& minecraftVersion);
 
 /// \brief The arguments that name \a files to horizon-prepare, or empty when incomplete.
 QStringList prepareArguments(const Located& files);
+
+/// \brief One readable sentence about what a folder is missing, or empty when nothing is.
+QString explain(const Located& files);
 
 }  // namespace HorizonMinecraftFiles
