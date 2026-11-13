@@ -17,6 +17,7 @@
 #include <QJsonObject>
 
 #include "Application.h"
+#include "settings/SettingsObject.h"
 #include "FileSystem.h"
 
 namespace HorizonMinecraftFiles {
