@@ -33,7 +33,7 @@ QString jarInMeta(const QString& version)
     const QStringList candidates = {
         FS::PathCombine(root, QStringLiteral("net.minecraft"), version + QStringLiteral(".jar")),
         FS::PathCombine(root, QStringLiteral("versions"), version, version + QStringLiteral(".jar")),
-        FS::PathCombine(root, QStringLiteral(".minecraft"), QStringLiteral("versions"), version, version + QStringLiteral(".jar")),
+        FS::PathCombine(FS::PathCombine(root, QStringLiteral(".minecraft"), QStringLiteral("versions")), version, version + QStringLiteral(".jar")),
     };
     for (const auto& candidate : candidates) {
         if (QFileInfo::exists(candidate))
@@ -50,7 +50,7 @@ QString versionJsonInMeta(const QString& version)
     const QStringList candidates = {
         FS::PathCombine(root, QStringLiteral("net.minecraft"), version + QStringLiteral(".json")),
         FS::PathCombine(root, QStringLiteral("versions"), version, version + QStringLiteral(".json")),
-        FS::PathCombine(root, QStringLiteral(".minecraft"), QStringLiteral("versions"), version, version + QStringLiteral(".json")),
+        FS::PathCombine(FS::PathCombine(root, QStringLiteral(".minecraft"), QStringLiteral("versions")), version, version + QStringLiteral(".json")),
     };
     for (const auto& candidate : candidates) {
         if (QFileInfo::exists(candidate))
