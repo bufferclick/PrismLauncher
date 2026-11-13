@@ -72,10 +72,27 @@ JL's layout is not even `.minecraft`-shaped. Prism stores everything shared:
 
 | Piece | JL's location |
 | --- | --- |
-| version JSON | `<dataRoot>/net.minecraft/<version>.json` |
-| client jar | `<dataRoot>/net.minecraft/<version>.jar` |
+| version JSON | `<dataRoot>/meta/net.minecraft/<version>.json` |
+| client jar | *not kept as `<version>.jar`* — Prism's meta cache downloads it |
 | libraries | `<dataRoot>/libraries` |
 | assets | `<dataRoot>/assets` |
+
+The `meta/` level is easy to miss: `Meta::BaseEntity::executeTask` resolves
+`QDir("meta").absoluteFilePath(localFilename())` and `localFilename()` is
+`uid + '/' + version + ".json"`. Looking for `<root>/net.minecraft/<version>.json` — which
+is the shape Horizon's own error message suggests — finds nothing even in the right folder.
+
+Do **not** require the client jar. Prism does not keep `<version>.jar` beside the JSON, and
+`horizon-prepare` can take it from the version JSON's own `downloads`.
+
+If no version JSON exists at all (JL only keeps one for a version an instance installed),
+fetch it from Mojang's `version_manifest_v2.json` and write it to
+`<dataRoot>/meta/net.minecraft/<version>.json`. Sending someone off to play the version in
+another launcher first is not an acceptable answer.
+
+**An instance folder is never the right folder to choose.** A CurseForge or Prism instance
+holds `minecraftinstance.json` / `instance.cfg` and one instance's own files; the version
+JSON, libraries and assets live beside the launcher's data, shared.
 
 The documented answer for a launcher with a different layout is to name each piece instead of
 using `--minecraft-dir`:
@@ -87,6 +104,15 @@ using `--minecraft-dir`:
 `HorizonMinecraftFiles` finds those four in JL's data root and passes them, so **the files JL
 already downloaded are the ones used**. Nobody should have to copy gigabytes into a fake
 `.minecraft`, and Horizon should never be asked to read a second copy.
+
+## Mistake 5: guessing JL's layout from Horizon's error message
+
+Horizon said *"Missing .../versions/26.3/26.3.json"*, so the locator looked for
+`<dataRoot>/net.minecraft/<version>.json` — neither the official layout nor JL's. Prism's is
+`<dataRoot>/meta/net.minecraft/<version>.json`. Read the writer, not the error message.
+
+Also: an instance folder (`minecraftinstance.json`, `instance.cfg`) is never a Minecraft
+installation. Never accept one.
 
 ## The launch contract
 
