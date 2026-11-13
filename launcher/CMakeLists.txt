@@ -302,6 +302,8 @@ set(MINECRAFT_SOURCES
     minecraft/HorizonCreationTask.h
     minecraft/HorizonInstance.cpp
     minecraft/HorizonInstance.h
+    minecraft/HorizonMinecraftFiles.cpp
+    minecraft/HorizonMinecraftFiles.h
     minecraft/HorizonResources.cpp
     minecraft/HorizonResources.h
     minecraft/VanillaInstanceCreationTask.cpp

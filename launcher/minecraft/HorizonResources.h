@@ -112,6 +112,36 @@ class HorizonUpdateTask : public Task {
 };
 
 /**
+ * Fetches the server jar the first prepare needs.
+ *
+ * horizon-prepare documents that the first --prepare needs --server-jar, that Horizon never
+ * downloads it, and that the launcher must fetch it from the version JSON's downloads.server for
+ * an owner only. JL already has the version JSON, so it can do exactly that.
+ */
+class HorizonServerJarTask : public Task {
+    Q_OBJECT
+
+   public:
+    explicit HorizonServerJarTask(QString versionJsonPath, QString outputPath);
+
+    /// \brief The downloaded jar, when it succeeded.
+    QString jarPath() const { return m_outputPath; }
+    /// \brief True when there was no server download to fetch (nothing to do, not an error).
+    bool notAvailable() const { return m_notAvailable; }
+
+    void executeTask() override;
+
+   signals:
+    /// \brief Human-readable progress, for the dialog that started this.
+    void logLine(QString line);
+
+   private:
+    QString m_versionJsonPath;
+    QString m_outputPath;
+    bool m_notAvailable = false;
+};
+
+/**
  * Runs horizon-prepare to build the resources horizon-client reads.
  *
  * This is the step Horizon will not do without: it needs the player's own Minecraft files and a
@@ -130,6 +160,8 @@ class HorizonPrepareTask : public Task {
     void logLine(QString line);
 
    private:
+    void startPreparer();
+    QString serverJarPath() const;
     void onReadyRead();
     void onFinished(int exitCode);
 

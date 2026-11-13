@@ -22,10 +22,20 @@
 #include "FileSystem.h"
 #include "archive/ExtractZipTask.h"
 #include "minecraft/HorizonBuilds.h"
+#include "minecraft/HorizonMinecraftFiles.h"
 #include "net/NetJob.h"
 #include "net/Request.h"
 
 namespace {
+
+/// \brief The Minecraft version encoded in a prepared folder name, "<tag>__<version>".
+QString minecraftVersionForPrepare(const QString& outputDir)
+{
+    const auto name = QFileInfo(outputDir).fileName();
+    const auto marker = name.lastIndexOf(QStringLiteral("__"));
+    return marker >= 0 ? name.mid(marker + 2) : QString();
+}
+
 /// Pages walked when the direct `nightly` tag lookup fails: the releases list is led by a
 /// `launcher@x.y.z` entry several times a day, so a Nightly is often not on page 1.
 constexpr int kMaxReleasePages = 10;
@@ -232,8 +242,7 @@ HorizonPrepareTask::HorizonPrepareTask(QString buildDir, QString outputDir, QWid
 
 void HorizonPrepareTask::executeTask()
 {
-    const auto prepare = HorizonBuilds::preparePath(m_buildDir);
-    if (prepare.isEmpty()) {
+    if (HorizonBuilds::preparePath(m_buildDir).isEmpty()) {
         emitFailed(tr("This Horizon build has no horizon-prepare, so its resources cannot be built."));
         return;
     }
@@ -241,6 +250,32 @@ void HorizonPrepareTask::executeTask()
         emitFailed(tr("Could not create %1").arg(m_outputDir));
         return;
     }
+
+    // The first prepare of a version also needs the server jar, which Horizon never fetches.
+    // Do that first so the run is not wasted on a missing file.
+    const auto files = HorizonMinecraftFiles::locate(nullptr, minecraftVersionForPrepare(m_outputDir));
+    if (files.complete() && !QFileInfo::exists(serverJarPath())) {
+        auto* jar = new HorizonServerJarTask(files.versionJson, serverJarPath());
+        connect(jar, &HorizonServerJarTask::logLine, this, [this](const QString& line) { emit logLine(line); });
+        connect(jar, &Task::finished, this, [this, jar] {
+            jar->deleteLater();
+            startPreparer();
+        });
+        jar->start();
+        return;
+    }
+
+    startPreparer();
+}
+
+QString HorizonPrepareTask::serverJarPath() const
+{
+    return FS::PathCombine(m_outputDir, QStringLiteral("server.jar"));
+}
+
+void HorizonPrepareTask::startPreparer()
+{
+    const auto prepare = HorizonBuilds::preparePath(m_buildDir);
 
     m_process = new QProcess(this);
     m_process->setProgram(prepare);
@@ -251,7 +286,25 @@ void HorizonPrepareTask::executeTask()
 
     // Horizon's documented preparation call. --complete copies the sounds and fails unless the
     // result would pass --check, so the game starts with nothing missing.
-    m_process->setArguments({ "--prepare", "--output", m_outputDir, "--complete", "--progress", "json" });
+    QStringList args{ "--prepare", "--output", m_outputDir, "--complete", "--progress", "json" };
+
+    // Horizon only searches the official launcher, ATLauncher and the CurseForge app, so it
+    // reported "Missing .minecraft/versions/26.3/26.3.json" for a version JL had downloaded
+    // itself. Its documented answer for that is to name each file, which is what this does.
+    const auto files = HorizonMinecraftFiles::locate(nullptr, minecraftVersionForPrepare(m_outputDir));
+    if (files.complete()) {
+        args << HorizonMinecraftFiles::prepareArguments(files);
+        // Horizon's own contract: the first prepare needs the server jar, no launcher keeps it.
+        if (QFileInfo::exists(serverJarPath()))
+            args << QStringLiteral("--server-jar") << serverJarPath();
+        emit logLine(tr("Reading your Minecraft files from %1").arg(files.versionJson));
+    } else {
+        emit logLine(tr("JL could not find its own copy of Minecraft %1. Horizon will search its own "
+                        "list of launchers and may ask you to play the version once elsewhere. Looked for: %2")
+                         .arg(files.version, files.searched.join(QStringLiteral("; "))));
+    }
+
+    m_process->setArguments(args);
 
     connect(m_process, &QProcess::readyReadStandardOutput, this, &HorizonPrepareTask::onReadyRead);
     connect(m_process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &HorizonPrepareTask::onFinished);
@@ -470,4 +523,61 @@ void HorizonUpdateTask::fail(const QString& reason)
 {
     emit logLine(reason);
     emitFailed(reason);
+}
+
+// ---------------------------------------------------------------------------------------
+// The server jar the first prepare needs
+// ---------------------------------------------------------------------------------------
+
+HorizonServerJarTask::HorizonServerJarTask(QString versionJsonPath, QString outputPath)
+    : m_versionJsonPath(std::move(versionJsonPath)), m_outputPath(std::move(outputPath))
+{}
+
+void HorizonServerJarTask::executeTask()
+{
+    // The jar may already be there from an earlier prepare; --server-jar only matters the first
+    // time, so never re-download what is present.
+    if (QFileInfo::exists(m_outputPath)) {
+        emitSucceeded();
+        return;
+    }
+
+    QFile file(m_versionJsonPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        emitFailed(tr("Could not read the version file %1").arg(m_versionJsonPath));
+        return;
+    }
+    const auto doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
+    const auto downloads = doc.object().value(QStringLiteral("downloads")).toObject();
+    const auto server = downloads.value(QStringLiteral("server")).toObject();
+    const auto url = server.value(QStringLiteral("url")).toString();
+    if (url.isEmpty()) {
+        // Some versions ship no server jar at all. Not an error: Horizon simply will not need
+        // one, and the preparer says so itself if it does.
+        m_notAvailable = true;
+        emit logLine(tr("This Minecraft version has no server jar to download."));
+        emitSucceeded();
+        return;
+    }
+
+    setStatus(tr("Downloading the Minecraft server jar…"));
+    FS::ensureFolderPathExists(QFileInfo(m_outputPath).absolutePath());
+
+    auto job = new NetJob(QStringLiteral("Horizon server jar"), APPLICATION->network());
+    job->addNetAction(Net::Request::makeFile(QUrl(url), m_outputPath));
+    connect(job, &NetJob::succeeded, this, [this, job] {
+        job->deleteLater();
+        emit logLine(tr("Downloaded the server jar to %1").arg(m_outputPath));
+        emitSucceeded();
+    });
+    connect(job, &NetJob::failed, this, [this, job](QString reason) {
+        job->deleteLater();
+        // A missing server jar only blocks the FIRST prepare of a version; surface it but do not
+        // pretend the whole install failed.
+        emit logLine(tr("Could not download the server jar: %1").arg(reason));
+        emitSucceeded();
+    });
+    job->start();
 }

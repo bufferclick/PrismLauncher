@@ -738,6 +738,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // not a reliable signal: it is only written after a translations index download, so on a
         // fresh settings file it stays empty and used to send every launch back into the wizard.
         m_settings->registerSetting("SetupCompleted", false);
+        // Where JL should look for the Minecraft files horizon-prepare needs. Empty means "JL's
+        // own data root", which is where its downloaded version JSON, libraries and assets are.
+        m_settings->registerSetting("HorizonMinecraftDir", QString());
 
         // Console
         m_settings->registerSetting("ShowConsole", false);
@@ -1278,7 +1281,11 @@ bool Application::createSetupWizard()
         QString oldHostName = settings()->get("LastHostname").toString();
         if (currentHostName != oldHostName) {
             settings()->set("LastHostname", currentHostName);
-            return true;
+            // A new hostname used to mean "find Java again". On a laptop that changes whenever
+            // the network does, so it reopened the wizard for no reason. A working Java path
+            // settles it; only a missing one is worth asking about.
+            if (FS::ResolveExecutable(settings()->get("JavaPath").toString()).isNull())
+                return true;
         }
         QString currentJavaPath = settings()->get("JavaPath").toString();
         QString actualPath = FS::ResolveExecutable(currentJavaPath);
@@ -1346,6 +1353,12 @@ bool Application::createSetupWizard()
         if (setupWizard.exec() != QDialog::Accepted) {
             qWarning() << "Setup wizard was not completed; continuing with the current settings";
         }
+        // Record it here, not only on the path that skips the wizard. The flag used to be set
+        // exclusively when the wizard did NOT run, so a wizard that ran once never set it and
+        // came back on every single launch. Showing it once is enough: the pages that matter
+        // are reachable from Settings and Help afterwards.
+        settings()->set("SetupCompleted", true);
+        settings()->set("IgnoreJavaWizard", true);
     }
 
     return wizardRequired;
