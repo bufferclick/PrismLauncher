@@ -11,6 +11,7 @@
 #include "HorizonDialog.h"
 
 #include <QDialogButtonBox>
+#include <QFileDialog>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QProgressBar>
@@ -19,9 +20,11 @@
 #include <QVBoxLayout>
 
 #include "Application.h"
+#include "settings/SettingsObject.h"
 #include "DesktopServices.h"
 #include "FileSystem.h"
 #include "minecraft/HorizonBuilds.h"
+#include "minecraft/HorizonMinecraftFiles.h"
 #include "minecraft/HorizonResources.h"
 
 namespace {
@@ -70,12 +73,14 @@ HorizonDialog::HorizonDialog(QWidget* parent) : QDialog(parent)
     auto* buttons = new QDialogButtonBox(this);
     m_download = buttons->addButton(tr("Download Horizon"), QDialogButtonBox::ActionRole);
     m_prepare = buttons->addButton(tr("Prepare game files"), QDialogButtonBox::ActionRole);
+    m_folder = buttons->addButton(tr("Minecraft folder…"), QDialogButtonBox::ActionRole);
     m_support = buttons->addButton(tr("Support Horizon"), QDialogButtonBox::ActionRole);
     m_close = buttons->addButton(QDialogButtonBox::Close);
     layout->addWidget(buttons);
 
     connect(m_download, &QPushButton::clicked, this, &HorizonDialog::downloadBuild);
     connect(m_prepare, &QPushButton::clicked, this, &HorizonDialog::prepareResources);
+    connect(m_folder, &QPushButton::clicked, this, &HorizonDialog::chooseMinecraftFolder);
     connect(m_support, &QPushButton::clicked, this, &HorizonDialog::openProjectPage);
     connect(m_close, &QPushButton::clicked, this, &QDialog::accept);
 
@@ -195,6 +200,35 @@ void HorizonDialog::fail(const QString& reason)
     m_status->setText(tr("<b>Something went wrong.</b> %1").arg(reason));
     m_progress->setVisible(false);
     refreshStatus();
+}
+
+void HorizonDialog::chooseMinecraftFolder()
+{
+    // Horizon only searches the official launcher, ATLauncher and the CurseForge app. When JL's
+    // own copy is not the one to use, this points the preparer at a folder explicitly instead of
+    // making anyone hand-copy gigabytes into a fake .minecraft.
+    const auto current = APPLICATION->settings()->get("HorizonMinecraftDir").toString();
+    const auto dir = QFileDialog::getExistingDirectory(
+        this, tr("Folder holding Minecraft's versions, libraries and assets"), current,
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    if (dir.isEmpty())
+        return;
+
+    APPLICATION->settings()->set("HorizonMinecraftDir", dir);
+    appendLog(tr("Minecraft files will be read from %1").arg(dir));
+
+    // Say straight away whether that folder really has what the preparer needs.
+    const auto files = HorizonMinecraftFiles::locate(nullptr, QStringLiteral("26.3"));
+    if (files.complete()) {
+        appendLog(tr("Found %1").arg(files.versionJson));
+        m_status->setText(tr("<b>Using Minecraft files from %1.</b> Press “Prepare game files”.")
+                              .arg(dir));
+    } else {
+        appendLog(tr("That folder is missing: %1").arg(files.searched.join(QStringLiteral("; "))));
+        m_status->setText(tr("<b>%1 does not look like a Minecraft folder.</b> It needs a version "
+                             "JSON, the client jar, libraries/ and assets/.")
+                              .arg(dir));
+    }
 }
 
 void HorizonDialog::openProjectPage()

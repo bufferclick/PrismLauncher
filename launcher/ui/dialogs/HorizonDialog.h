@@ -49,6 +49,7 @@ class HorizonDialog : public QDialog {
    private slots:
     void downloadBuild();
     void prepareResources();
+    void chooseMinecraftFolder();
     void openProjectPage();
 
    private:
@@ -62,6 +63,7 @@ class HorizonDialog : public QDialog {
     QPlainTextEdit* m_log = nullptr;
     QProgressBar* m_progress = nullptr;
     QPushButton* m_download = nullptr;
+    QPushButton* m_folder = nullptr;
     QPushButton* m_prepare = nullptr;
     QPushButton* m_support = nullptr;
     QPushButton* m_close = nullptr;
