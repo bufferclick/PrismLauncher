@@ -16,7 +16,7 @@
 
 #include "Application.h"
 #include "FileSystem.h"
-#include "HorizonPort.h"
+#include "minecraft/horizon/HorizonPort.h"
 #include "minecraft/horizon/HorizonInstance.h"
 #include "minecraft/mod/ResourceFolderModel.h"
 
