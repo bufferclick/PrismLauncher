@@ -114,6 +114,18 @@ Horizon said *"Missing .../versions/26.3/26.3.json"*, so the locator looked for
 Also: an instance folder (`minecraftinstance.json`, `instance.cfg`) is never a Minecraft
 installation. Never accept one.
 
+## Mistake 6: comparing a stripped version to a raw one
+
+The updater stripped the tag prefix when storing releases (`"v0.1.0"` → `Version("0.1.0")`)
+but compared against the raw `--install-version` argument (`Version("v0.1.0")`). FlexVer
+treats the leading `v` as a text section, so the two are not equal and the lookup **never**
+matched — on every version. The strip helper's own comment explains why the prefix must go;
+the other side of the comparison simply never got it.
+
+Rule: strip once, at the boundary, and compare like with like. And when a lookup fails,
+degrade to the newest release rather than refusing to act: an update that cannot find its
+exact target is still better than no update.
+
 ## The launch contract
 
 ### Ask the build what it supports
