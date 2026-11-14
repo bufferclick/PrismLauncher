@@ -71,9 +71,12 @@ jobs:
           # doctor exits non-zero only on FAIL; a missing Java or Rust is a WARN
           # and is expected on a build machine.
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::horizonport doctor reported a failure"; exit 1 }
-          $out = python -m unittest -v porting.tests.test_horizonport_sign porting.tests.test_horizonport_config `
-                                      porting.tests.test_horizonport_fetch porting.tests.test_horizonport_mods `
-                                      porting.tests.test_horizonport_launch porting.tests.test_horizonport_cli 2>&1
+          # Out-String -Stream turns stderr into plain text; capturing 2>&1
+          # directly leaves ErrorRecords that carry no per-line text.
+          $out = & python -m unittest -v porting.tests.test_horizonport_sign porting.tests.test_horizonport_config `
+                                       porting.tests.test_horizonport_fetch porting.tests.test_horizonport_mods `
+                                       porting.tests.test_horizonport_launch porting.tests.test_horizonport_cli 2>&1 |
+                 Out-String -Stream
           $code = $LASTEXITCODE
           $out | ForEach-Object { Write-Host $_ }
           if ($code -ne 0) {

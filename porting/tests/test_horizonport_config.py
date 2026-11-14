@@ -24,11 +24,15 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(self.project.policy["requireSignature"])
         self.assertTrue(self.project.policy["ownerGate"])
         self.assertFalse(self.project.policy["telemetry"])
-        self.assertEqual(self.project.adapter_entry, self.root / "adapter" / "index.mjs")
+        # PortProject resolves its root, so compare against a resolved path:
+        # on Windows tempfile hands out the 8.3 short form (C:\Users\RUNNER~1)
+        # which resolve() expands, and an unresolved expectation would never match.
+        self.assertEqual(self.project.adapter_entry, (self.root / "adapter" / "index.mjs").resolve())
 
     def test_data_lives_under_the_project_and_resolves(self):
-        self.assertEqual(self.project.data, self.root / ".horizonport")
-        self.assertEqual(self.project.store, self.root / ".horizonport" / "store")
+        # Resolved for the same reason: the project normalises its own root.
+        self.assertEqual(self.project.data, (self.root / ".horizonport").resolve())
+        self.assertEqual(self.project.store, (self.root / ".horizonport" / "store").resolve())
         self.assertTrue(self.project.store.is_dir())
 
     def test_an_absolute_data_path_is_kept(self):
