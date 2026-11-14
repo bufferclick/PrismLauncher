@@ -77,10 +77,25 @@ jobs:
           $code = $LASTEXITCODE
           $out | ForEach-Object { Write-Host $_ }
           if ($code -ne 0) {
-            # Surface the failing cases in the annotation too, not just the log.
-            $failures = $out | Select-String -Pattern '^(FAIL|ERROR):' | ForEach-Object { $_.Line }
-            if (-not $failures) { $failures = $out | Select-Object -Last 15 }
-            $failures | ForEach-Object { Write-Host "::error::$_" }
+            # Surface the failing cases and their assertion text in annotations;
+            # the raw job log is not always retrievable.
+            $inFailure = $false
+            $shown = 0
+            foreach ($line in $out) {
+              if ($line -match '^(FAIL|ERROR): ') {
+                $inFailure = $true
+                Write-Host "::error::$line"
+                continue
+              }
+              if ($line -match '^-{10,}$' -or $line -match '^=+$' -or $line -match '^Ran \d+ tests?') {
+                $inFailure = $false
+                continue
+              }
+              if ($inFailure -and $shown -lt 60 -and $line.Trim()) {
+                Write-Host "::error::  $line"
+                $shown++
+              }
+            }
             Write-Host "::error::the toolkit's self-tests failed"
             exit 1
           }
