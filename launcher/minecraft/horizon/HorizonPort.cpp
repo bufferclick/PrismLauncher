@@ -31,24 +31,59 @@
 #include "FileSystem.h"
 
 namespace {
+/// True when `parent` holds a runnable toolkit: the package in `parent/porting`,
+/// importable as `porting.horizonport`.
+///
+/// Both halves matter. `python -m porting.horizonport` has to *import* `porting`
+/// and then find `horizonport` inside it, so the folder that goes on PYTHONPATH
+/// is the one holding `porting/`, and that folder must contain both __init__.py
+/// files. Pointing PYTHONPATH at `porting/` itself cannot work: `porting` would
+/// then have to be a module file, not a package, and Python reports
+/// "No module named 'porting'" no matter how the process is started.
+bool holdsToolkit(const QString& parent)
+{
+    return QFileInfo::exists(FS::PathCombine(parent, "porting", "__init__.py")) &&
+           QFileInfo::exists(FS::PathCombine(parent, "porting", "horizonport", "__init__.py")) &&
+           QFileInfo::exists(FS::PathCombine(parent, "porting", "horizonport", "__main__.py"));
+}
+
 // The toolkit is vendored at <repo>/porting/horizonport. A shipped build keeps
-// it beside the executable, so both layouts are searched, in that order.
+// it beside the executable, so both layouts are searched, in that order. The
+// returned path is the folder that *contains* `porting/` — the import root.
 QStringList candidateRoots()
 {
     QStringList roots;
     if (auto configured = qEnvironmentVariable("HORIZONPORT"); !configured.isEmpty())
         roots << configured;
-    roots << FS::PathCombine(qApp->applicationDirPath(), "porting");
-    roots << FS::PathCombine(qApp->applicationDirPath(), "..", "porting");
+    roots << qApp->applicationDirPath();
+    roots << FS::PathCombine(qApp->applicationDirPath(), "..");
     // A run straight from a build tree: climb out of build/ and look for the
     // source checkout's porting/ folder.
     QDir folder(qApp->applicationDirPath());
     for (int depth = 0; depth < 6; ++depth) {
-        roots << FS::PathCombine(folder.absolutePath(), "porting");
+        roots << folder.absolutePath();
         if (!folder.cdUp())
             break;
     }
     return roots;
+}
+
+/// Python's own wording for "the toolkit could not be imported". That message is
+/// a packaging bug in JL, not something the player can act on, so it is
+/// translated into what to do about it.
+bool isImportFailure(const QString& message)
+{
+    return message.contains(QStringLiteral("No module named 'porting'")) ||
+           message.contains(QStringLiteral("Error while finding module specification for 'porting.horizonport'"));
+}
+
+QString importFailureMessage(const QString& toolkit)
+{
+    return QObject::tr(
+        "JL could not start the Horizon toolkit from %1. This is a fault in the installed copy of JL, not in your "
+        "installation of Horizon; reinstalling JL fixes it. Set HORIZONPORT to the folder that contains porting/ to "
+        "point JL at a different copy.")
+        .arg(toolkit);
 }
 }  // namespace
 
@@ -62,7 +97,7 @@ QString HorizonPort::projectDir()
 QString HorizonPort::toolkitRoot()
 {
     for (const auto& root : candidateRoots()) {
-        if (QFileInfo::exists(FS::PathCombine(root, "horizonport", "__init__.py")))
+        if (holdsToolkit(root))
             return QDir(root).absolutePath();
     }
     return {};
@@ -90,8 +125,16 @@ QString HorizonPort::pythonExecutable()
 bool HorizonPort::isAvailable(QString* reason)
 {
     if (toolkitRoot().isEmpty()) {
-        if (reason)
-            *reason = QObject::tr("The HorizonPort toolkit is missing. Reinstall JL; the porting/ folder ships with it.");
+        if (reason) {
+            QStringList looked = candidateRoots();
+            for (auto& path : looked)
+                path = QDir(path).absolutePath();
+            looked.removeDuplicates();
+            *reason = QObject::tr(
+                          "The HorizonPort toolkit is missing. JL looked for porting/horizonport in: %1. "
+                          "Reinstall JL, or set HORIZONPORT to the folder that contains porting/.")
+                          .arg(looked.join(QStringLiteral(", ")));
+        }
         return false;
     }
     if (pythonExecutable().isEmpty()) {
@@ -162,6 +205,8 @@ bool HorizonPort::parseError(QProcess& process, const QString& stdOut, QString* 
     QString message = QString::fromUtf8(process.readAllStandardError()).trimmed();
     if (message.isEmpty())
         message = stdOut.trimmed();
+    if (isImportFailure(message))
+        message = importFailureMessage(toolkitRoot());
     if (message.isEmpty())
         message = QObject::tr("horizonport exited with code %1").arg(process.exitCode());
     if (error)
@@ -282,6 +327,8 @@ bool HorizonPort::runStreaming(const QStringList& arguments,
         QString message = stdErr.trimmed();
         if (message.isEmpty())
             message = stdOut.trimmed();
+        if (isImportFailure(message))
+            message = importFailureMessage(toolkitRoot());
         if (error)
             *error = message.isEmpty() ? QObject::tr("horizonport exited with code %1").arg(process.exitCode()) : message;
         return false;

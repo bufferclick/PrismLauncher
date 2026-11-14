@@ -11,6 +11,8 @@
 #include "HorizonCreationTask.h"
 
 #include <QDebug>
+#include <QDir>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,6 +20,8 @@
 #include "FileSystem.h"
 #include "HorizonInstance.h"
 #include "HorizonPort.h"
+
+#include "java/JavaUtils.h"
 #include "settings/INISettingsObject.h"
 
 HorizonCreationTask::HorizonCreationTask(QString buildTag) : m_buildTag(std::move(buildTag))
@@ -75,8 +79,22 @@ void HorizonCreationTask::executeTask()
     // ------------------------------------------------------------------
     setStatus(tr("Preparing Horizon's resources. First run only; this takes a few minutes."));
     QJsonObject prepared;
+
+    // Preparing needs a Java of the version Horizon pins. The toolkit finds one
+    // through JAVA_HOME, PATH, or the official launcher's runtimes, so it is
+    // never required here; but when JL already manages that Java, handing it
+    // over removes the most common reason a preparation fails on a fresh PC.
+    QStringList prepareArgs = { "prepare", "--build", m_buildTag };
+    const QString pinned = JavaUtils::getPinnedPath(25);
+    if (!pinned.isEmpty()) {
+        // getPinnedPath() names the java executable; --java-home wants the
+        // folder above bin/.
+        const QDir bin = QFileInfo(pinned).dir();
+        prepareArgs << "--java-home" << QDir(bin.absolutePath()).absoluteFilePath(QStringLiteral(".."));
+    }
+
     const bool preparedOk = HorizonPort::runStreaming(
-        { "prepare", "--build", m_buildTag },
+        prepareArgs,
         [this](const QString& line) {
             // The toolkit emits one JSON event per line: {message} or {fraction}.
             const auto document = QJsonDocument::fromJson(line.toUtf8());

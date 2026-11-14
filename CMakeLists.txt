@@ -184,9 +184,18 @@ set(Launcher_LOGIN_CALLBACK_URL "" CACHE STRING "URL that gets opened when the u
 set(Launcher_LEGACY_FMLLIBS_BASE_URL "https://files.prismlauncher.org/fmllibs/" CACHE STRING "URL for legacy (<=1.5.2) FML Libraries.")
 
 ######## Set version numbers ########
+# This is the version JL *reports* and the version the updater compares against
+# release tags, so it has to track the tags that are actually published. It sat
+# at 0.0.11 while releases were at v0.2.x, and the consequences were visible:
+# the About box showed a version that never changed, and every release looked
+# newer than the running copy, so "new update available" never went away even
+# straight after updating.
+#
+# release.yml checks that this matches the pushed tag after building, so a
+# release and the version inside it cannot drift apart again.
 set(Launcher_VERSION_MAJOR 0)
-set(Launcher_VERSION_MINOR 0)
-set(Launcher_VERSION_PATCH 11)
+set(Launcher_VERSION_MINOR 2)
+set(Launcher_VERSION_PATCH 2)
 
 # Data folder of Prism Launcher. JL offers to import it on first start.
 set(Launcher_PrismDataFolder "PrismLauncher" CACHE STRING "Name of Prism Launcher's data folder, used for the first-run instance import.")

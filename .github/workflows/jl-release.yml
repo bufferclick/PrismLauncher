@@ -75,7 +75,8 @@ jobs:
           # directly leaves ErrorRecords that carry no per-line text.
           $out = & python -m unittest -v porting.tests.test_horizonport_sign porting.tests.test_horizonport_config `
                                        porting.tests.test_horizonport_fetch porting.tests.test_horizonport_mods `
-                                       porting.tests.test_horizonport_launch porting.tests.test_horizonport_cli 2>&1 |
+                                       porting.tests.test_horizonport_launch porting.tests.test_horizonport_cli `
+                                       porting.tests.test_horizonport_install 2>&1 |
                  Out-String -Stream
           $code = $LASTEXITCODE
           $out | ForEach-Object { Write-Host $_ }
@@ -141,14 +142,56 @@ jobs:
         run: |
           if (-not (Test-Path "out/JL.exe")) { Write-Host "::error::JL.exe missing"; exit 1 }
           if (-not (Test-Path "out/JL-Windows-x64.zip")) { Write-Host "::error::portable zip missing"; exit 1 }
-          # A shipped JL without the toolkit cannot install or play Horizon.
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "out/JL-Windows-x64.zip"))
           try {
-            $toolkit = $zip.Entries | Where-Object { $_.FullName -like "*porting/horizonport/cli.py" }
+            $toolkit = $zip.Entries | Where-Object { $_.FullName -eq "porting/horizonport/cli.py" }
             if (-not $toolkit) { Write-Host "::error::the portable zip does not contain porting/horizonport"; exit 1 }
-            Write-Host "toolkit entries: $($zip.Entries.Count)"
+            Write-Host "zip entries: $($zip.Entries.Count)"
           } finally { $zip.Dispose() }
+
+          # A file being present proves nothing: it has to *run*, from the layout
+          # the launcher ships, with the same import path the launcher sets. The
+          # previous check only looked for the file, so a build went out in which
+          # every Horizon command failed with "No module named 'porting'".
+          Expand-Archive -Path "out/JL-Windows-x64.zip" -DestinationPath "out/unpacked" -Force
+          Push-Location "out/unpacked"
+          try {
+            $env:PYTHONPATH = (Get-Location).Path
+            $v = & python -m porting.horizonport --version 2>&1 | Out-String -Stream
+            $code = $LASTEXITCODE
+            $v | ForEach-Object { Write-Host "  $_" }
+            if ($code -ne 0) {
+              Write-Host "::error::the toolkit in the shipped zip does not run (exit $code)"
+              exit 1
+            }
+            # doctor's exit code is 0 unless a check FAILs; a missing Java is a WARN.
+            & python -m porting.horizonport doctor | Out-String -Stream | ForEach-Object { Write-Host "  $_" }
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::the shipped toolkit's doctor reported a failure"
+              exit 1
+            }
+          } finally { Pop-Location }
           Get-ChildItem out | Format-Table Name, Length
+
+      - name: Verify the version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          # JL reports its own version and the updater compares release tags
+          # against it. If the two disagree the updater either offers the build
+          # that is already running, or refuses a genuinely newer one. The
+          # version in CMakeLists.txt drifted once already (0.0.11 while tags
+          # were at v0.2.x), which is what this step exists to prevent.
+          $reported = (Select-String -Path "CMakeLists.txt" -Pattern '^set\(Launcher_VERSION_(MAJOR|MINOR|PATCH) ([0-9]+)\)').Matches |
+                       ForEach-Object { $_.Groups[2].Value }
+          $built = $reported -join "."
+          $tag = "${{ github.ref_name }}"
+          if ($tag.StartsWith("v")) { $tag = $tag.Substring(1) }
+          Write-Host "tag: $tag   reported: $built"
+          if ($built -ne $tag) {
+            Write-Host "::error::the build reports $built but the tag is $tag; bump Launcher_VERSION_* in CMakeLists.txt"
+            exit 1
+          }
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
