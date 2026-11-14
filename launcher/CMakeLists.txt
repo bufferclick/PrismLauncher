@@ -296,16 +296,6 @@ set(MINECRAFT_SOURCES
     minecraft/Library.cpp
     minecraft/Library.h
     minecraft/MojangDownloadInfo.h
-    minecraft/HorizonBuilds.cpp
-    minecraft/HorizonBuilds.h
-    minecraft/HorizonCreationTask.cpp
-    minecraft/HorizonCreationTask.h
-    minecraft/HorizonInstance.cpp
-    minecraft/HorizonInstance.h
-    minecraft/HorizonMinecraftFiles.cpp
-    minecraft/HorizonMinecraftFiles.h
-    minecraft/HorizonResources.cpp
-    minecraft/HorizonResources.h
     minecraft/VanillaInstanceCreationTask.cpp
     minecraft/VanillaInstanceCreationTask.h
     minecraft/VersionFile.cpp
@@ -911,8 +901,6 @@ SET(LAUNCHER_SOURCES
     ui/pages/instance/ResourcePackPage.cpp
     ui/pages/instance/ShaderPackPage.h
     ui/pages/instance/ShaderPackPage.cpp
-    ui/pages/instance/HorizonModFolderPage.cpp
-    ui/pages/instance/HorizonModFolderPage.h
     ui/pages/instance/ModFolderPage.cpp
     ui/pages/instance/ModFolderPage.h
     ui/pages/instance/NotesPage.cpp
@@ -1046,8 +1034,6 @@ SET(LAUNCHER_SOURCES
     ui/dialogs/DebugModeDialog.h
     ui/dialogs/DebugReport.cpp
     ui/dialogs/DebugReport.h
-    ui/dialogs/HorizonDialog.cpp
-    ui/dialogs/HorizonDialog.h
     ui/dialogs/AboutDialog.h
     ui/dialogs/ProfileSelectDialog.cpp
     ui/dialogs/ProfileSelectDialog.h

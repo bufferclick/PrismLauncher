@@ -37,7 +37,6 @@
 #include "LaunchController.h"
 #include "Application.h"
 #include "launch/steps/PrintServers.h"
-#include "minecraft/HorizonInstance.h"
 #include "minecraft/auth/AccountData.h"
 #include "minecraft/auth/AccountList.h"
 
@@ -279,17 +278,6 @@ QString LaunchController::askOfflineName(const QString& playerName, bool* ok)
 
 void LaunchController::login()
 {
-    // Horizon is not Minecraft: it authenticates with the user's own Microsoft account and has
-    // no use for a launch session, demo mode or an offline player name. Asking for an account
-    // first (and failing when none is set up) would make the instance unlaunchable.
-    if (m_instance->instanceType() == HorizonInstance::typeString()) {
-        m_session = std::make_shared<AuthSession>();
-        m_session->launchMode = LaunchMode::Offline;
-        m_actualLaunchMode = LaunchMode::Offline;
-        launchInstance();
-        return;
-    }
-
     decideAccount();
 
     LaunchDecision decision = decideLaunchMode();

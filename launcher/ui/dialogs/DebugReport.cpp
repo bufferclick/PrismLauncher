@@ -145,8 +145,7 @@ QString DebugReport::collect()
     }
 #if defined(Q_OS_WIN)
     {
-        // Adapter descriptions, driver versions and VRAM: the thing that decides whether
-        // Horizon (Vulkan) can even start on this machine. PowerShell returns one field per
+        // Adapter descriptions, driver versions and VRAM. PowerShell returns one field per
         // line, which avoids guessing at wmic's CSV column order.
         const auto raw = run(QStringLiteral("powershell"),
                              { "-NoProfile", "-Command",
@@ -224,36 +223,6 @@ QString DebugReport::collect()
     } else {
         out << QStringLiteral("(no instances to inspect)");
     }
-
-    // ---------------------------------------------------------------- Horizon
-    section(out, QStringLiteral("Horizon"));
-    const auto horizonCandidates = {
-        QStringLiteral("horizon"),
-        QStringLiteral("horizon-launcher"),
-        QStringLiteral("Horizon"),
-    };
-    bool foundHorizon = false;
-    for (const auto& candidate : horizonCandidates) {
-        const auto path = QStandardPaths::findExecutable(candidate);
-        if (path.isEmpty())
-            continue;
-        out << QStringLiteral("Found: %1").arg(path);
-        foundHorizon = true;
-    }
-    if (!foundHorizon) {
-        out << QStringLiteral("Not found on PATH. JL launches Horizon by installing and ");
-        out << QStringLiteral("running the official Horizon launcher; see the Horizon tab.");
-    }
-#if defined(Q_OS_WIN)
-    {
-        const auto localAppData = qEnvironmentVariable("LOCALAPPDATA");
-        if (!localAppData.isEmpty()) {
-            const auto installs = QDir(localAppData).entryList({ QStringLiteral("*orizon*") }, QDir::Dirs);
-            for (const auto& dir : installs)
-                out << QStringLiteral("Install dir: %1").arg(QDir(localAppData).absoluteFilePath(dir));
-        }
-    }
-#endif
 
     out << QString();
     out << QStringLiteral("End of report.");

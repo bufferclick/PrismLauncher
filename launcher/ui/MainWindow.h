@@ -133,7 +133,6 @@ class MainWindow : public QMainWindow {
 
     void on_actionClearMetadata_triggered();
     void on_actionFabricVersions_triggered();
-    void on_actionHorizon_triggered();
 
 #ifdef Q_OS_MACOS
     void on_actionAddToPATH_triggered();
