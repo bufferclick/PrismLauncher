@@ -9,6 +9,15 @@ The engine and the porting kit live in
 [`horizon-rust/horizon`](https://github.com/horizon-rust/horizon). The toolkit JL
 uses is vendored at [`porting/horizonport`](../porting/horizonport) under MIT.
 
+The toolkit is started as `python -m porting.horizonport` with the folder that
+*contains* `porting/` on `PYTHONPATH`. That level matters: `porting.horizonport`
+is a package inside a package, so `PYTHONPATH` must name the folder holding
+`porting/`, and pointing it at `porting/` itself fails with
+`No module named 'porting'`. `porting/tests/test_horizonport_install.py` runs the
+toolkit from a copy laid out the way a release ships it, and the release workflow
+unpacks the finished zip and runs the toolkit from there, so the shipped layout
+is exercised on every build rather than assumed.
+
 ## The one rule
 
 **JL implements none of the risky parts.** Signature verification, archive
@@ -135,6 +144,7 @@ portable zip that does not contain the toolkit.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | "Python 3.11 or newer is required" | Python missing or too old | install Python 3.11+ and restart JL |
+| "JL could not start the Horizon toolkit from ..." | the `porting/` folder did not survive installation, or `PYTHONPATH` points at the wrong level | reinstall JL; if you keep the toolkit elsewhere, set `HORIZONPORT` to the folder that *contains* `porting/`, never to `porting/` itself |
 | Play refuses immediately | no account, or the account was never signed in | add the Microsoft account in Accounts |
 | "This account doesn't own Minecraft" | the account does not own the game | sign in with the account that bought it (Game Pass counts) |
 | The first instance takes a long time | it downloads ~1 GiB of game files and prepares 2–4 GiB | normal, once per build; later instances are instant |
