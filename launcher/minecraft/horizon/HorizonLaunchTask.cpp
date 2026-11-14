@@ -113,12 +113,12 @@ void HorizonLaunchTask::startGame(const QJsonObject& plan)
         m_stdErr += text;
         const auto lines = text.split('\n', Qt::SkipEmptyParts);
         for (const auto& line : lines)
-            onLogLine(line, MessageLevel::Stderr);
+            onLogLine(line, MessageLevel::Error);
     });
     connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
         const auto lines = QString::fromUtf8(process->readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
         for (const auto& line : lines)
-            onLogLine(line, MessageLevel::Stdout);
+            onLogLine(line, MessageLevel::Message);
     });
     connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError processError) {
         if (processError == QProcess::FailedToStart) {

@@ -20,6 +20,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -149,7 +150,7 @@ QString HorizonPort::stableTag()
     return qEnvironmentVariable("HORIZONPORT_STABLE_TAG", QString());
 }
 
-bool HorizonPort::parseError(const QProcess& process, const QString& stdOut, QString* error)
+bool HorizonPort::parseError(QProcess& process, const QString& stdOut, QString* error)
 {
     QString message = QString::fromUtf8(process.readAllStandardError()).trimmed();
     if (message.isEmpty())
@@ -231,16 +232,25 @@ bool HorizonPort::runStreaming(const QStringList& arguments,
 
     QString stdOut;
     QString stdErr;
+    QString pending;
     QElapsedTimer clock;
     clock.start();
-    auto consume = [&](bool final) {
-        while (process.canReadLine()) {
-            const QString line = QString::fromUtf8(process.readLine()).trimmed();
+
+    auto drainStdout = [&]() {
+        const QString text = QString::fromUtf8(process.readAllStandardOutput());
+        if (text.isEmpty())
+            return;
+        stdOut += text;
+        // Emit complete lines only: a JSON event can be split across reads.
+        pending += text;
+        int newline = pending.indexOf('\n');
+        while (newline >= 0) {
+            const QString line = pending.left(newline).trimmed();
+            pending.remove(0, newline + 1);
             if (!line.isEmpty() && onLine)
                 onLine(line);
+            newline = pending.indexOf('\n');
         }
-        stdOut += QString::fromUtf8(process.readAllStandardOutput());
-        stdErr += QString::fromUtf8(process.readAllStandardError());
     };
 
     while (process.state() != QProcess::NotRunning) {
@@ -254,9 +264,12 @@ bool HorizonPort::runStreaming(const QStringList& arguments,
             }
             continue;
         }
-        consume(false);
+        drainStdout();
+        stdErr += QString::fromUtf8(process.readAllStandardError());
     }
-    consume(true);
+    drainStdout();
+    if (!pending.trimmed().isEmpty() && onLine)
+        onLine(pending.trimmed());
 
     if (process.exitCode() != 0) {
         QString message = stdErr.trimmed();
@@ -267,8 +280,14 @@ bool HorizonPort::runStreaming(const QStringList& arguments,
         return false;
     }
     if (output) {
-        const auto document = QJsonDocument::fromJson(stdOut.toUtf8());
-        *output = document.object();
+        for (const auto& line : stdOut.split('\n')) {
+            const QString candidate = line.trimmed();
+            if (!candidate.startsWith('{'))
+                continue;
+            const auto document = QJsonDocument::fromJson(candidate.toUtf8());
+            if (document.isObject())
+                *output = document.object();
+        }
     }
     return true;
 }

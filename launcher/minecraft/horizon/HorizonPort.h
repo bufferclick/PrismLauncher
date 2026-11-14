@@ -73,5 +73,5 @@ class HorizonPort {
 
    private:
     static QStringList baseArguments();
-    static bool parseError(const QProcess& process, const QString& stdOut, QString* error);
+    static bool parseError(QProcess& process, const QString& stdOut, QString* error);
 };

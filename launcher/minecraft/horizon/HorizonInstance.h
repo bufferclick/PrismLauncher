@@ -31,9 +31,6 @@ class HorizonInstance : public MinecraftInstance {
     HorizonInstance(SettingsObject* globalSettings, std::unique_ptr<SettingsObject> settings, const QString& rootDir);
     ~HorizonInstance() override = default;
 
-    void saveNow() override {}
-    void loadSpecificSettings() override {}
-
     QString modsRoot() const override;
     QString instanceConfigFolder() const override;
 

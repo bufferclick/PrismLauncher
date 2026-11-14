@@ -12,6 +12,7 @@
 
 #include <QDebug>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 #include "FileSystem.h"
