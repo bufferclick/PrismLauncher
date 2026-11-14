@@ -1270,6 +1270,14 @@ bool Application::createSetupWizard()
         if (ignoreJavaWizard) {
             return false;
         }
+        // A player who only ever plays Horizon needs no Java at all: the game is
+        // native, and its resources are prepared by horizon-prepare, which the
+        // toolkit runs. Asking them to install a JVM would be a wall with nothing
+        // behind it, so a finished setup stays finished.
+        if (settings()->get("SetupCompleted").toBool() && instances()->count() > 0 &&
+            !instances()->hasJavaInstances()) {
+            return false;
+        }
         // A configured Java is proof enough that the java page has nothing to add.
         if (settings()->get("SetupCompleted").toBool() && !FS::ResolveExecutable(settings()->get("JavaPath").toString()).isNull()) {
             return false;

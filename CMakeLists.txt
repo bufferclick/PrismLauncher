@@ -282,6 +282,14 @@ endif()
 
 # By using this key in your builds you accept the terms of use laid down in
 # https://docs.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use
+# NOTE for JL: this is Prism Launcher's registered application, which JL inherits by
+# using Prism. It is already approved by Mojang, so sign-in works out of the box, and
+# the consent screen players see says "Prism Launcher". To have JL's own name on that
+# screen, register your own app (Entra ID -> App registrations, "Personal Microsoft
+# accounts only", Allow public client flows = Yes), get it approved at
+# https://aka.ms/mce-reviewappid, then rebuild with:
+#   -DLauncher_MSA_CLIENT_ID=<your-application-client-id>
+# No source changes are needed: the value is compiled into BuildConfig.
 set(Launcher_MSA_CLIENT_ID "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb" CACHE STRING "Client ID you can get from Microsoft Identity Platform when you register an application")
 
 # By using this key in your builds you accept the terms and conditions laid down in

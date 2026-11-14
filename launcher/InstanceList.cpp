@@ -58,6 +58,7 @@
 
 #include "InstanceTask.h"
 #include "WatchLock.h"
+#include "minecraft/horizon/HorizonInstance.h"
 #include "minecraft/MinecraftInstance.h"
 #include "settings/INISettingsObject.h"
 
@@ -720,6 +721,15 @@ std::unique_ptr<MinecraftInstance> InstanceList::loadInstance(const InstanceId& 
 
     const QString instType = instanceSettings->get("InstanceType").toString();
 
+    // Horizon instances keep Minecraft's folder layout and pages, but they
+    // launch the native Rust client through the HorizonPort toolkit instead of
+    // starting a JVM.
+    if (instType == HorizonInstance::typeString()) {
+        auto inst = std::make_unique<HorizonInstance>(m_globalSettings, std::move(instanceSettings), instanceRoot);
+        qDebug() << "Loaded Horizon instance" << inst->name() << "from" << inst->instanceRoot();
+        return inst;
+    }
+
     if (!instType.isEmpty() && instType != "OneSix") {
         qDebug() << "Instance " << id << "has invalid type" << instType;
         return nullptr;
@@ -734,6 +744,15 @@ std::unique_ptr<MinecraftInstance> InstanceList::loadInstance(const InstanceId& 
     }
 
     return inst;
+}
+
+bool InstanceList::hasJavaInstances() const
+{
+    for (const auto& instance : m_instances) {
+        if (instance && instance->instanceType() != HorizonInstance::typeString())
+            return true;
+    }
+    return false;
 }
 
 void InstanceList::increaseGroupCount(const QString& group)

@@ -245,6 +245,19 @@
               </widget>
              </item>
              <item>
+              <widget class="QRadioButton" name="horizonFilter">
+               <property name="text">
+                <string>Horizon</string>
+               </property>
+               <property name="toolTip">
+                <string>Horizon is the native Rust client by horizon-rust. JL installs the signed build, prepares its resources once, and keeps its content mods (.hmod) in the instance folder.</string>
+               </property>
+               <attribute name="buttonGroup">
+                <string notr="true">loaderBtnGroup</string>
+               </attribute>
+              </widget>
+             </item>
+             <item>
               <widget class="QRadioButton" name="fabricFilter">
                <property name="text">
                 <string>Fabric</string>
@@ -281,6 +294,38 @@
               </widget>
              </item>
             </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="horizonSummary">
+         <property name="title">
+          <string>Horizon</string>
+         </property>
+         <layout class="QVBoxLayout" name="horizonSummaryLayout">
+          <item>
+           <widget class="QLabel" name="horizonVersionLabel">
+            <property name="font">
+             <font>
+              <pointsize>11</pointsize>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>Minecraft 26.3</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="horizonBodyLabel">
+            <property name="text">
+             <string>Horizon is a complete client of its own, built for this one Minecraft version, so there is nothing to pick here — just press OK. The first Horizon instance downloads the build and the game files once; every later one starts instantly. JL does all of it for you.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
            </widget>
           </item>
          </layout>

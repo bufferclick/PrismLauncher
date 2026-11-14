@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horizonport.dev/schemas/instance.schema.json",
+  "title": "Horizon instance",
+  "description": "instance.json: one instance's build, prepared tree, settings and mods. The game never reads this file; the launcher does.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "name", "created", "build", "prepared", "settings", "mods"],
+  "properties": {
+    "schema": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "created": { "type": "string", "format": "date-time" },
+    "lastPlayed": { "type": ["string", "null"], "format": "date-time" },
+    "playCount": { "type": "integer", "minimum": 0 },
+    "build": { "type": "string", "description": "the build's tag, as store/builds/<tag>" },
+    "prepared": { "type": "string", "description": "the store key of the prepared tree this instance reads" },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 320, "maximum": 16384 },
+        "height": { "type": "integer", "minimum": 320, "maximum": 16384 },
+        "fullscreen": { "type": "boolean" }
+      }
+    },
+    "mods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "file"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+          "file": { "type": "string" },
+          "version": { "type": "string" },
+          "enabled": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

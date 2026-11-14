@@ -2,12 +2,14 @@
 #include <FileSystem.h>
 #include <ui/pages/instance/DataPackPage.h>
 #include "minecraft/MinecraftInstance.h"
+#include "minecraft/horizon/HorizonInstance.h"
 #include "ui/pages/BasePage.h"
 #include "ui/pages/BasePageProvider.h"
 #include "ui/pages/instance/InstanceSettingsPage.h"
 #include "ui/pages/instance/LogPage.h"
 #include "ui/pages/instance/ManagedPackPage.h"
 #include "ui/pages/instance/ModFolderPage.h"
+#include "ui/pages/instance/HorizonModFolderPage.h"
 #include "ui/pages/instance/NotesPage.h"
 #include "ui/pages/instance/OtherLogsPage.h"
 #include "ui/pages/instance/ResourcePackPage.h"
@@ -30,13 +32,22 @@ class InstancePageProvider : protected QObject, public BasePageProvider {
         values.append(new LogPage(inst));
         values.append(new VersionPage(inst));
         values.append(ManagedPackPage::createPage(inst));
-        ModFolderPage* modsPage = new ModFolderPage(inst, inst->loaderModList());
-        modsPage->setFilter("%1 (*.zip *.jar *.litemod *.nilmod)");
-        values.append(modsPage);
+        // Horizon has its own content format (.hmod) and its own folder, read by
+        // the engine from game/horizon-mods. Showing Java's mod folder here
+        // would offer a page that can never load anything.
+        if (inst->instanceType() == HorizonInstance::typeString()) {
+            values.append(new HorizonModFolderPage(inst));
+        } else {
+            ModFolderPage* modsPage = new ModFolderPage(inst, inst->loaderModList());
+            modsPage->setFilter("%1 (*.zip *.jar *.litemod *.nilmod)");
+            values.append(modsPage);
+        }
         values.append(new CoreModFolderPage(inst, inst->coreModList()));
         values.append(new NilModFolderPage(inst, inst->nilModList()));
         values.append(new ResourcePackPage(inst, inst->resourcePackList()));
-        values.append(new GlobalDataPackPage(inst));
+        if (inst->instanceType() != HorizonInstance::typeString()) {
+            values.append(new GlobalDataPackPage(inst));
+        }
         values.append(new TexturePackPage(inst, inst->texturePackList()));
         values.append(new ShaderPackPage(inst, inst->shaderPackList()));
         values.append(new NotesPage(inst));

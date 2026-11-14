@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horizonport.dev/schemas/launch-plan.schema.json",
+  "title": "Launch plan",
+  "description": "What `horizonport play NAME --dry-run` prints: the exact argv, folder and environment for one start, validated against the build's --launch-api.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["argv", "cwd", "instance", "game", "home", "resources", "session"],
+  "properties": {
+    "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "cwd": { "type": "string" },
+    "instance": { "type": "string" },
+    "game": { "type": "string" },
+    "home": { "type": "string" },
+    "resources": { "type": "string" },
+    "session": { "enum": ["stdin", "file"] },
+    "env": { "type": "object", "additionalProperties": { "type": "string" } },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

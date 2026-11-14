@@ -102,6 +102,10 @@ class InstanceList : public QAbstractListModel {
 
     int count() const { return static_cast<int>(m_instances.size()); }
 
+    /// True when at least one instance needs a JVM to run. Horizon instances do
+    /// not: they launch a native binary, so a Horizon-only player needs no Java.
+    bool hasJavaInstances() const;
+
     InstListError loadList();
     void saveNow();
 
