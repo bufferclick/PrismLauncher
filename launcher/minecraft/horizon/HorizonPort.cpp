@@ -30,6 +30,8 @@
 #include "Application.h"
 #include "FileSystem.h"
 
+#include <optional>
+
 namespace {
 /// True when `parent` holds a runnable toolkit: the package in `parent/porting`,
 /// importable as `porting.horizonport`.
@@ -66,6 +68,44 @@ QStringList candidateRoots()
             break;
     }
     return roots;
+}
+
+/// The JSON object in `text`, or nothing when there is none.
+///
+/// Reads the whole buffer first because the toolkit pretty-prints: the object
+/// spans dozens of lines, so scanning line by line for one starting with '{'
+/// finds `{` and nothing that parses. Falls back to the widest brace-delimited
+/// span for output that still carries progress text in front of the object.
+std::optional<QJsonObject> findJsonObject(const QString& text)
+{
+    const auto trimmed = text.trimmed();
+    if (trimmed.isEmpty())
+        return std::nullopt;
+
+    QJsonParseError parseError{};
+    auto document = QJsonDocument::fromJson(trimmed.toUtf8(), &parseError);
+    if (parseError.error == QJsonParseError::NoError && document.isObject())
+        return document.object();
+
+    const auto start = trimmed.indexOf('{');
+    const auto end = trimmed.lastIndexOf('}');
+    if (start < 0 || end <= start)
+        return std::nullopt;
+    document = QJsonDocument::fromJson(trimmed.mid(start, end - start + 1).toUtf8(), &parseError);
+    if (parseError.error == QJsonParseError::NoError && document.isObject())
+        return document.object();
+    return std::nullopt;
+}
+
+/// The first non-empty line of `text`, shortened, for an error message.
+QString firstLine(const QString& text, int limit)
+{
+    for (const auto& line : text.split('\n')) {
+        const auto trimmed = line.trimmed();
+        if (!trimmed.isEmpty())
+            return trimmed.left(limit);
+    }
+    return {};
 }
 
 /// Python's own wording for "the toolkit could not be imported". That message is
@@ -244,15 +284,18 @@ bool HorizonPort::run(const QStringList& arguments, QJsonObject* output, QString
         return parseError(process, stdOut, error);
 
     if (output) {
-        QJsonParseError parseError{};
-        const auto document = QJsonDocument::fromJson(stdOut.toUtf8(), &parseError);
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        // The toolkit keeps stdout to one object under --json, so the whole
+        // buffer is the object. It is pretty-printed across many lines, which is
+        // why a line-by-line search never worked. findJsonObject() also copes
+        // with an older build that still writes progress to stdout.
+        const auto object = findJsonObject(stdOut);
+        if (!object) {
             if (error)
-                *error = QObject::tr("horizonport %1 printed something that is not JSON")
-                             .arg(arguments.value(0));
+                *error = QObject::tr("horizonport %1 printed something that is not JSON: %2")
+                             .arg(arguments.value(0), firstLine(stdOut, 200));
             return false;
         }
-        *output = document.object();
+        *output = *object;
     }
     return true;
 }
@@ -334,14 +377,8 @@ bool HorizonPort::runStreaming(const QStringList& arguments,
         return false;
     }
     if (output) {
-        for (const auto& line : stdOut.split('\n')) {
-            const QString candidate = line.trimmed();
-            if (!candidate.startsWith('{'))
-                continue;
-            const auto document = QJsonDocument::fromJson(candidate.toUtf8());
-            if (document.isObject())
-                *output = document.object();
-        }
+        if (const auto object = findJsonObject(stdOut))
+            *output = *object;
     }
     return true;
 }

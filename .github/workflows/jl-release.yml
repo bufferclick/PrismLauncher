@@ -76,7 +76,7 @@ jobs:
           $out = & python -m unittest -v porting.tests.test_horizonport_sign porting.tests.test_horizonport_config `
                                        porting.tests.test_horizonport_fetch porting.tests.test_horizonport_mods `
                                        porting.tests.test_horizonport_launch porting.tests.test_horizonport_cli `
-                                       porting.tests.test_horizonport_install 2>&1 |
+                                       porting.tests.test_horizonport_install porting.tests.test_horizonport_json 2>&1 |
                  Out-String -Stream
           $code = $LASTEXITCODE
           $out | ForEach-Object { Write-Host $_ }

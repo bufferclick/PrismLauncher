@@ -44,8 +44,18 @@ def _paint(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m" if _COLOR else text
 
 
+# Set by the CLI when `--json` is in play. Progress goes to stdout for a human
+# reading a terminal, and to stderr whenever stdout belongs to a parser.
+_JSON_MODE = False
+
+
+def set_json_mode(enabled: bool) -> None:
+    global _JSON_MODE
+    _JSON_MODE = bool(enabled)
+
+
 def info(message: str) -> None:
-    print(message, flush=True)
+    print(message, file=sys.stderr if _JSON_MODE else sys.stdout, flush=True)
 
 
 def ok(message: str) -> None:
