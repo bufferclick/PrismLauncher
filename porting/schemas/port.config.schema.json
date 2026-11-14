@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horizonport.dev/schemas/port.config.schema.json",
+  "title": "HorizonPort port config",
+  "description": "port.config.json: what a launcher port pins and what it promises. Unknown keys are refused by the toolkit, so a typo fails loudly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["horizonport", "name", "engine", "minecraft", "paths", "launch", "adapter", "policy", "auth"],
+  "properties": {
+    "horizonport": { "const": 1, "description": "the config schema this file uses" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$" },
+    "description": { "type": "string" },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "tag", "commit"],
+      "properties": {
+        "repo": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", "examples": ["horizon-rust/horizon"] },
+        "tag": { "type": ["string", "null"], "description": "the release tag to fetch; null means choose per install" },
+        "commit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$", "description": "the exact revision the build was made from, when known" }
+      }
+    },
+    "minecraft": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+){0,3}$", "examples": ["26.3"] },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data"],
+      "properties": {
+        "data": { "type": "string", "minLength": 1, "description": "where the store, instances and secrets live (relative to the project, or absolute)" }
+      }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "fullscreen"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 320, "maximum": 16384 },
+        "height": { "type": "integer", "minimum": 320, "maximum": 16384 },
+        "fullscreen": { "type": "boolean" }
+      }
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "entry"],
+      "properties": {
+        "kind": { "enum": ["node", "rust", "python", "none"] },
+        "entry": { "type": ["string", "null"], "description": "the file the launcher's UI imports or runs" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requireSignature", "ownerGate", "telemetry", "keepBuilds"],
+      "properties": {
+        "requireSignature": { "type": "boolean", "description": "true refuses a build without SHA256SUMS and a valid signature" },
+        "ownerGate": { "type": "boolean", "description": "true starts the game only for an account that owns Minecraft: Java Edition" },
+        "telemetry": { "type": "boolean", "description": "false keeps every byte on the player's machine" },
+        "keepBuilds": { "type": "integer", "minimum": 1, "maximum": 20, "description": "how many builds to keep for rollback" }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clientId"],
+      "properties": {
+        "clientId": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "your own Azure app's Application (client) ID; never another launcher's"
+        }
+      }
+    },
+    "keys": { "type": ["string", "null"], "description": "a release key file to trust instead of Horizon's" },
+    "created": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horizonport.dev/schemas/store-index.schema.json",
+  "title": "HorizonPort store index",
+  "description": "store/index.json: every entry the port downloaded or prepared once, with the digest that proves it is unchanged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "entries"],
+  "properties": {
+    "schema": { "const": 1 },
+    "updated": { "type": "string", "format": "date-time" },
+    "entries": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": { "enum": ["build", "prepared", "mojang"] },
+          "path": { "type": "string" },
+          "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "files": { "type": "integer", "minimum": 0 },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "created": { "type": "string" },
+          "verified": { "type": ["string", "null"] },
+          "refs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

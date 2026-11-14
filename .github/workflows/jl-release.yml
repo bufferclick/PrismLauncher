@@ -85,6 +85,25 @@ jobs:
             Write-Host "::error::no compiler error found; tail: $tail"
           }
 
+      - name: Verify the HorizonPort toolkit
+        shell: pwsh
+        run: |
+          # The toolkit is what JL calls for every security-sensitive step:
+          # verifying Horizon's signed checksums, unpacking a build, downloading
+          # the owner's game files, preparing resources, validating a launch
+          # command. If it is broken, the port is broken, so prove it on the
+          # platform JL ships on.
+          python -m porting.horizonport --version
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the toolkit does not run"; exit 1 }
+          python -m porting.horizonport doctor
+          # doctor exits non-zero only on FAIL; a missing Java or Rust is a WARN
+          # and is expected on a build machine.
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::horizonport doctor reported a failure"; exit 1 }
+          python -m unittest porting.tests.test_horizonport_sign porting.tests.test_horizonport_config `
+                             porting.tests.test_horizonport_fetch porting.tests.test_horizonport_mods `
+                             porting.tests.test_horizonport_launch porting.tests.test_horizonport_cli
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the toolkit's self-tests failed"; exit 1 }
+
       - name: Collect portable build
         shell: pwsh
         run: pwsh -NoProfile -File tools/jlac/package-portable.ps1
@@ -94,6 +113,13 @@ jobs:
         run: |
           if (-not (Test-Path "out/JL.exe")) { Write-Host "::error::JL.exe missing"; exit 1 }
           if (-not (Test-Path "out/JL-Windows-x64.zip")) { Write-Host "::error::portable zip missing"; exit 1 }
+          # A shipped JL without the toolkit cannot install or play Horizon.
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "out/JL-Windows-x64.zip"))
+          try {
+            $toolkit = $zip.Entries | Where-Object { $_.FullName -like "*porting/horizonport/cli.py" }
+            if (-not $toolkit) { Write-Host "::error::the portable zip does not contain porting/horizonport"; exit 1 }
+            Write-Host "toolkit entries: $($zip.Entries.Count)"
+          } finally { $zip.Dispose() }
           Get-ChildItem out | Format-Table Name, Length
 
       - name: Upload workflow artifact

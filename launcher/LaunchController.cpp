@@ -57,6 +57,7 @@
 #include "BuildConfig.h"
 #include "JavaCommon.h"
 #include "launch/steps/TextPrint.h"
+#include "minecraft/horizon/HorizonInstance.h"
 #include "tasks/Task.h"
 #include "ui/dialogs/ChooseOfflineNameDialog.h"
 
@@ -66,6 +67,24 @@ void LaunchController::executeTask()
 {
     if (!m_instance) {
         emitFailed(tr("No instance specified!"));
+        return;
+    }
+
+    // Horizon is not Minecraft: it has no JVM, no Java arguments and no launch
+    // session of its own. It plays with the player's own Microsoft account and
+    // gets that account's session handed to it on stdin, so asking for Java
+    // settings here would be a wall that cannot be climbed.
+    if (m_instance->instanceType() == HorizonInstance::typeString()) {
+        decideAccount();
+        if (!m_accountToUse || !m_accountToUse->isActive()) {
+            emitFailed(tr("Horizon needs a Microsoft account that owns Minecraft: Java Edition. "
+                          "Add one in Accounts, then press Play again."));
+            return;
+        }
+        m_session = std::make_shared<AuthSession>();
+        m_accountToUse->fillSession(m_session);
+        m_actualLaunchMode = LaunchMode::Normal;
+        launchInstance();
         return;
     }
 

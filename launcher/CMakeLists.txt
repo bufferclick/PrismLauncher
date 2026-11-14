@@ -271,6 +271,14 @@ set(MINECRAFT_SOURCES
     minecraft/GradleSpecifier.h
     minecraft/MinecraftInstance.cpp
     minecraft/MinecraftInstance.h
+    minecraft/horizon/HorizonCreationTask.cpp
+    minecraft/horizon/HorizonCreationTask.h
+    minecraft/horizon/HorizonInstance.cpp
+    minecraft/horizon/HorizonInstance.h
+    minecraft/horizon/HorizonLaunchTask.cpp
+    minecraft/horizon/HorizonLaunchTask.h
+    minecraft/horizon/HorizonPort.cpp
+    minecraft/horizon/HorizonPort.h
     minecraft/LaunchProfile.cpp
     minecraft/LaunchProfile.h
     minecraft/Component.cpp
@@ -901,6 +909,8 @@ SET(LAUNCHER_SOURCES
     ui/pages/instance/ResourcePackPage.cpp
     ui/pages/instance/ShaderPackPage.h
     ui/pages/instance/ShaderPackPage.cpp
+    ui/pages/instance/HorizonModFolderPage.cpp
+    ui/pages/instance/HorizonModFolderPage.h
     ui/pages/instance/ModFolderPage.cpp
     ui/pages/instance/ModFolderPage.h
     ui/pages/instance/NotesPage.cpp
@@ -1342,6 +1352,33 @@ endif()
 if(DEFINED Launcher_APP_BINARY_DEFS)
     target_compile_definitions(${Launcher_Name} PRIVATE ${Launcher_APP_BINARY_DEFS})
     target_compile_definitions(Launcher_logic PRIVATE ${Launcher_APP_BINARY_DEFS})
+endif()
+
+# HorizonPort lives in <repo>/porting. A run from a build tree finds it through
+# this definition; an installed build finds the copy placed beside the binary
+# by the install rule below.
+target_compile_definitions(Launcher_logic PRIVATE
+    HORIZONPORT_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+
+# The toolkit is plain Python with no dependencies, so it ships verbatim.
+# It is Horizon's MIT-licensed porting kit: no game files, no resources and no
+# secrets are ever inside it.
+if(EXISTS "${CMAKE_SOURCE_DIR}/porting/horizonport")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/porting"
+        DESTINATION ${BINARY_DEST_DIR}
+        COMPONENT Runtime
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+        PATTERN "tests" EXCLUDE)
+    # The portable zip is built from the "portable" component only, and a JL
+    # without the toolkit cannot install Horizon at all, so it is part of both.
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/porting"
+        DESTINATION ${BINARY_DEST_DIR}
+        COMPONENT portable
+        EXCLUDE_FROM_ALL
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+        PATTERN "tests" EXCLUDE)
 endif()
 
 install(TARGETS ${Launcher_Name}

@@ -67,3 +67,11 @@ flatbuild
 __pycache__/
 *.pyc
 out/
+
+# HorizonPort: machine-local data, never committed.
+# The toolkit (porting/horizonport) ships as source; the store, the prepared
+# resources, the instances and the secrets it creates are the player's and are
+# created at runtime, never checked in.
+.horizonport/
+dist/horizonport-bundle/
+*.hmod

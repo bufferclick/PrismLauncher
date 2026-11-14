@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horizonport.dev/schemas/horizonport-bundle.schema.json",
+  "title": "HorizonPort bundle",
+  "description": "horizonport-bundle.json: what a port ships. It pins builds and digests and carries no game files or prepared resources.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["horizonportBundle", "name", "created", "engine", "minecraft", "adapter", "builds"],
+  "properties": {
+    "horizonportBundle": { "const": 1 },
+    "name": { "type": "string" },
+    "created": { "type": "string", "format": "date-time" },
+    "engine": {
+      "type": "object",
+      "required": ["repo", "tag"],
+      "properties": {
+        "repo": { "type": "string" },
+        "tag": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"] }
+      }
+    },
+    "minecraft": { "type": "string" },
+    "launchApi": { "type": "string" },
+    "policy": { "type": "object" },
+    "adapter": { "type": "object" },
+    "builds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tag"],
+        "properties": {
+          "tag": { "type": "string" },
+          "archiveSha256": { "type": ["string", "null"] },
+          "files": { "type": "integer" },
+          "bytes": { "type": "integer" },
+          "launchApi": { "type": ["string", "null"] },
+          "minecraft": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "prepared": { "type": "array", "items": { "type": "object" } },
+    "instances": { "type": "array", "items": { "type": "object" } },
+    "contents": { "type": "string" }
+  }
+}
