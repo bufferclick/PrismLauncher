@@ -40,7 +40,14 @@ QStringList candidateRoots()
         roots << configured;
     roots << FS::PathCombine(qApp->applicationDirPath(), "porting");
     roots << FS::PathCombine(qApp->applicationDirPath(), "..", "porting");
-    roots << QStringLiteral(HORIZONPORT_SOURCE_ROOT) + "/porting";
+    // A run straight from a build tree: climb out of build/ and look for the
+    // source checkout's porting/ folder.
+    QDir folder(qApp->applicationDirPath());
+    for (int depth = 0; depth < 6; ++depth) {
+        roots << FS::PathCombine(folder.absolutePath(), "porting");
+        if (!folder.cdUp())
+            break;
+    }
     return roots;
 }
 }  // namespace

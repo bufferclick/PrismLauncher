@@ -1354,11 +1354,11 @@ if(DEFINED Launcher_APP_BINARY_DEFS)
     target_compile_definitions(Launcher_logic PRIVATE ${Launcher_APP_BINARY_DEFS})
 endif()
 
-# HorizonPort lives in <repo>/porting. A run from a build tree finds it through
-# this definition; an installed build finds the copy placed beside the binary
-# by the install rule below.
-target_compile_definitions(Launcher_logic PRIVATE
-    HORIZONPORT_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+# HorizonPort lives in <repo>/porting. A run from a build tree finds it by
+# walking up from the executable; an installed build finds the copy the install
+# rule below places beside it. No compile definition is used: adding one after
+# the precompiled header is built makes MSVC warn C4651, which JL treats as an
+# error.
 
 # The toolkit is plain Python with no dependencies, so it ships verbatim.
 # It is Horizon's MIT-licensed porting kit: no game files, no resources and no
