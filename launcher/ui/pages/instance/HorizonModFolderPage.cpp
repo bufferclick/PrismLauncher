@@ -40,8 +40,6 @@ HorizonModFolderPage::HorizonModFolderPage(MinecraftInstance* inst, QWidget* par
                                                     /*isIndexed=*/false, /*createDir=*/true, parent),
                             parent)
 {
-    auto* horizon = static_cast<HorizonInstance*>(inst);
-
     // Not a ModFolderPage: that one offers CurseForge/Modrinth browsing, which
     // cannot serve .hmod content and would only lead to dead ends.
     m_ui->actionAddItem->setText(tr("Add Mod"));
@@ -74,11 +72,10 @@ void HorizonModFolderPage::installMods()
     QStringList failures;
     for (const auto& file : files) {
         QString error;
-        QJsonObject report;
         // The toolkit checks the file the way the engine would before it is
         // copied anywhere, so a mod that would not load is refused here with
         // the reason instead of silently failing in the game.
-        if (!HorizonPort::run({ "mod", "install", file, "--instance", horizon->name() }, &report, &error))
+        if (!HorizonPort::run({ "mod", "install", file, "--instance", horizon->name() }, nullptr, &error))
             failures << QStringLiteral("%1: %2").arg(QFileInfo(file).fileName(), error);
     }
     if (m_model)
