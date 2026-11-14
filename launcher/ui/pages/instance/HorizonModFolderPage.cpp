@@ -10,6 +10,8 @@
 
 #include "HorizonModFolderPage.h"
 
+#include "ui_ExternalResourcesPage.h"
+
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPushButton>
@@ -30,15 +32,15 @@ QString selectedModId(const QModelIndex& index)
 }  // namespace
 
 HorizonModFolderPage::HorizonModFolderPage(MinecraftInstance* inst, QWidget* parent)
+    : ExternalResourcesPage(inst,
+                            // The engine reads .hmod files from game/horizon-mods;
+                            // the model watches exactly that folder, so a file added
+                            // by the game also appears here.
+                            new ResourceFolderModel(QDir(static_cast<HorizonInstance*>(inst)->modsRoot()), inst,
+                                                    /*isIndexed=*/false, /*createDir=*/true, parent),
+                            parent)
 {
-    Q_UNUSED(parent);
     auto* horizon = static_cast<HorizonInstance*>(inst);
-    m_instance = inst;
-
-    // The engine reads .hmod files from game/horizon-mods; the model watches
-    // exactly that folder so a file added by the game also shows up here.
-    auto* model = new ResourceFolderModel(QDir(horizon->modsRoot()), inst, /*isIndexed=*/false, /*createDir=*/true, this);
-    m_model = model;
 
     // Not a ModFolderPage: that one offers CurseForge/Modrinth browsing, which
     // cannot serve .hmod content and would only lead to dead ends.
