@@ -21,6 +21,7 @@ from pathlib import Path
 from . import auth, bundle, check, doctor, fetch, guide, instance as instance_mod, launch, mods, prepare, scaffold, sign
 from .config import CONFIG_NAME, PortProject
 from .store import Store, build_key
+from . import util
 from .util import PortError, error, human_bytes, info, ok, step, table, warn
 
 VERSION = "1.0.0"
@@ -30,6 +31,12 @@ CONTRACT = 1
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # `--json` promises exactly one object on stdout. Progress lines are useful
+    # to a human and poison to a launcher that parses stdout, so under `--json`
+    # they go to stderr instead. Without this, a caller parsing stdout sees
+    # "unpacking <archive>..." and reports that the toolkit "printed something
+    # that is not JSON" even though the command succeeded.
+    util.set_json_mode(bool(getattr(args, "json", False)))
     try:
         return dispatch(args, parser)
     except PortError as exc:

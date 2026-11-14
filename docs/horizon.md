@@ -18,6 +18,11 @@ toolkit from a copy laid out the way a release ships it, and the release workflo
 unpacks the finished zip and runs the toolkit from there, so the shipped layout
 is exercised on every build rather than assumed.
 
+`--json` means exactly one object on stdout and nothing else: progress lines go
+to stderr in that mode, because a launcher parses stdout and cannot tell a
+progress line from a parse error. The object is pretty-printed across many
+lines, so JL parses the whole buffer, never a single line.
+
 ## The one rule
 
 **JL implements none of the risky parts.** Signature verification, archive
