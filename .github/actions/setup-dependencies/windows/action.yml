@@ -21,6 +21,11 @@ runs:
     # NOTE: Installed on MinGW as well for SignTool
     - name: Enter VS Developer shell
       if: ${{ runner.os == 'Windows' }}
+      # Stays on v1: this is the newest release (v1.13.0, Jan 2024) and upstream
+      # has not published a Node 24 runtime. GitHub's warning is cosmetic on
+      # hosted runners, which force the action onto Node 24 anyway; the step
+      # works. Tracked upstream in ilammy/msvc-dev-cmd#106. Revisit if a v2
+      # lands, or replace it with a plain vcvars64.bat call if it ever breaks.
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: ${{ inputs.vcvars-arch }}

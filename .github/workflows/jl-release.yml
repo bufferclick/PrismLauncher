@@ -204,7 +204,10 @@ jobs:
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        # v3 only moves the runtime to Node 24; inputs are unchanged from v2.
+        # Staying on v2 makes GitHub force it onto Node 24 anyway, with a
+        # deprecation warning on every release.
+        uses: softprops/action-gh-release@v3
         with:
           name: JL ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
