@@ -124,9 +124,6 @@ AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent), ui(new Ui::AboutDia
     ui->copyLabel->setText(BuildConfig.LAUNCHER_COPYRIGHT);
 
     connect(ui->viewInGithub, &QPushButton::clicked, this, [this] { DesktopServices::openUrl(QUrl(BuildConfig.LAUNCHER_GIT)); });
-    // Horizon is not ours: the button exists so users can support the people who built it.
-    connect(ui->supportHorizon, &QPushButton::clicked, this,
-            [] { DesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/sponsors/horizon-rust"))); });
     connect(ui->closeButton, &QPushButton::clicked, this, &AboutDialog::close);
 
     connect(ui->aboutQt, &QPushButton::clicked, APPLICATION, &QApplication::aboutQt);

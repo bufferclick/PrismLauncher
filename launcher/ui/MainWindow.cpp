@@ -96,7 +96,6 @@
 
 #include "ui/dialogs/AboutDialog.h"
 #include "ui/dialogs/DebugModeDialog.h"
-#include "ui/dialogs/HorizonDialog.h"
 #include "ui/dialogs/FabricVersionsDialog.h"
 #include "ui/dialogs/CopyInstanceDialog.h"
 #include "ui/dialogs/CreateShortcutDialog.h"
@@ -1525,13 +1524,6 @@ void MainWindow::on_actionDebugMode_triggered()
 {
     // DebugModeDialog owns its report; constructing it collects the data.
     auto* dialog = new DebugModeDialog(this);
-    dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->show();
-}
-
-void MainWindow::on_actionHorizon_triggered()
-{
-    auto* dialog = new HorizonDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->show();
 }

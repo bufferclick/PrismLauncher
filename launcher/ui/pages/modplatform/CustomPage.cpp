@@ -44,7 +44,6 @@
 #include "Version.h"
 #include "meta/Index.h"
 #include "meta/VersionList.h"
-#include "minecraft/HorizonCreationTask.h"
 #include "minecraft/VanillaInstanceCreationTask.h"
 #include "ui/dialogs/FabricVersionsDialog.h"
 #include "ui/dialogs/NewInstanceDialog.h"
@@ -63,7 +62,6 @@ CustomPage::CustomPage(NewInstanceDialog* dialog, QWidget* parent) : QWidget(par
 
     connect(m_ui->loaderVersionList, &VersionSelectWidget::selectedVersionChanged, this, &CustomPage::setSelectedLoaderVersion);
     connect(m_ui->fabricFilter, &QRadioButton::toggled, this, &CustomPage::loaderFilterChanged);
-    connect(m_ui->horizonFilter, &QRadioButton::toggled, this, &CustomPage::loaderFilterChanged);
     connect(m_ui->loaderRefreshBtn, &QPushButton::clicked, this, &CustomPage::loaderRefresh);
     connect(m_ui->browseFabricButton, &QPushButton::clicked, this, [this] {
         FabricVersionsDialog dialog(this);
@@ -119,18 +117,6 @@ void CustomPage::filterChanged()
 
 void CustomPage::loaderFilterChanged()
 {
-    // Horizon is its own client built for a single Minecraft version. There is no version to
-    // pick and no loader build to pick, so both choosers are hidden and the page just says
-    // what the instance will be.
-    if (m_ui->horizonFilter->isChecked()) {
-        m_selectedVersion.reset();
-        m_selectedLoader.clear();
-        m_selectedLoaderVersion.reset();
-        updateLoaderUi();
-        suggestCurrent();
-        return;
-    }
-
     updateLoaderUi();
 
     const QString minecraftVersion = m_selectedVersion ? m_selectedVersion->descriptor() : QString();
@@ -165,25 +151,15 @@ void CustomPage::loaderFilterChanged()
 
 void CustomPage::updateLoaderUi()
 {
-    const bool horizon = m_ui->horizonFilter->isChecked();
+    m_ui->minecraftGroup->setVisible(true);
+    m_ui->loaderLine->setVisible(true);
+    m_ui->loaderVersionGroup->setVisible(true);
+    m_ui->browseFabricButton->setVisible(true);
+    m_ui->loaderLabel->setVisible(true);
+    m_ui->loaderRefreshBtn->setVisible(true);
 
-    // With Horizon there is nothing to choose, so the Minecraft version picker, its filter
-    // column, the separator and the loader build list are hidden and the summary takes their
-    // place. loaderChoiceGroup stays visible: it holds the Fabric/Horizon radios, so hiding it
-    // would hide the only control that can switch back to Fabric.
-    m_ui->minecraftGroup->setVisible(!horizon);
-    m_ui->loaderLine->setVisible(!horizon);
-    m_ui->loaderVersionGroup->setVisible(!horizon);
-    m_ui->horizonSummary->setVisible(horizon);
-    m_ui->browseFabricButton->setVisible(!horizon);
-    m_ui->loaderLabel->setVisible(!horizon);
-    m_ui->loaderRefreshBtn->setVisible(!horizon);
-
-    m_ui->horizonVersionLabel->setText(tr("Minecraft %1").arg(HorizonCreationTask::gameVersion()));
-
-    m_ui->pageTitle->setText(horizon ? tr("New Horizon instance") : tr("New Fabric instance"));
-    m_ui->pageSubtitle->setText(horizon ? tr("Horizon is a complete client of its own — nothing to configure here.")
-                                        : tr("Pick a Minecraft version, then a Fabric loader build."));
+    m_ui->pageTitle->setText(tr("New Fabric instance"));
+    m_ui->pageSubtitle->setText(tr("Pick a Minecraft version, then a Fabric loader build."));
 }
 
 CustomPage::~CustomPage()
@@ -199,8 +175,6 @@ bool CustomPage::shouldDisplay() const
 void CustomPage::retranslate()
 {
     m_ui->retranslateUi(this);
-    // The title and subtitle are also set in code (Horizon vs Fabric), so re-apply whichever
-    // one the current loader selection calls for.
     updateLoaderUi();
 }
 
@@ -221,21 +195,12 @@ QString CustomPage::selectedLoader() const
 
 QString CustomPage::selectedLoaderName() const
 {
-    if (m_ui->horizonFilter->isChecked())
-        return QStringLiteral("Horizon");
     return QStringLiteral("Fabric");
 }
 
 void CustomPage::suggestCurrent()
 {
     if (!isOpened) {
-        return;
-    }
-
-    // Horizon needs no version: the task knows the one version Horizon runs.
-    if (m_ui->horizonFilter->isChecked()) {
-        m_dialog->setSuggestedPack(QStringLiteral("Horizon"), new HorizonCreationTask());
-        m_dialog->setSuggestedIcon("default");
         return;
     }
 
@@ -262,11 +227,6 @@ void CustomPage::suggestCurrent()
 void CustomPage::setSelectedVersion(BaseVersion::Ptr version)
 {
     m_selectedVersion = std::move(version);
-    // The version list keeps loading in the background after switching to Horizon; ignoring it
-    // avoids re-running the Fabric loader lookup the user no longer asked for.
-    if (m_ui->horizonFilter->isChecked()) {
-        return;
-    }
     suggestCurrent();
     loaderFilterChanged();
 }

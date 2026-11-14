@@ -738,9 +738,6 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         // not a reliable signal: it is only written after a translations index download, so on a
         // fresh settings file it stays empty and used to send every launch back into the wizard.
         m_settings->registerSetting("SetupCompleted", false);
-        // Where JL should look for the Minecraft files horizon-prepare needs. Empty means "JL's
-        // own data root", which is where its downloaded version JSON, libraries and assets are.
-        m_settings->registerSetting("HorizonMinecraftDir", QString());
 
         // Console
         m_settings->registerSetting("ShowConsole", false);
