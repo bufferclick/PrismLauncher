@@ -55,6 +55,23 @@
 
 namespace {
 
+/// \brief Strip a leading "v"/"V" release-tag prefix from a version string.
+///
+/// GitHub tags are usually written "v0.0.2"; the launcher reports "0.0.2". The tag has
+/// to lose the prefix before it is parsed as a Version, otherwise FlexVer sorts the
+/// text section "v" before the numeric "0" and the release compares as *older* than the
+/// build that produced it.
+static QString stripVersionTagPrefix(const QString& tag)
+{
+    auto trimmed = tag.trimmed();
+    if (trimmed.size() > 1 && (trimmed.at(0) == QLatin1Char('v') || trimmed.at(0) == QLatin1Char('V')) &&
+        trimmed.at(1).isDigit()) {
+        return trimmed.mid(1);
+    }
+    return trimmed;
+}
+
+
 /** output to the log file */
 void appDebugOutput(QtMsgType type, const QMessageLogContext& context, const QString& msg)
 {
@@ -322,7 +339,10 @@ PrismUpdaterApp::PrismUpdaterApp(int& argc, char** argv) : QApplication(argc, ar
     m_printOnly = parser.isSet("list");
     auto userVersion = parser.value("install-version");
     if (!userVersion.isEmpty()) {
-        m_userSelectedVersion = Version(userVersion);
+        // Strip the same "v" prefix the release list strips, or the comparison below can never
+        // match: the tags are "v0.1.0" while release.version is "0.1.0".
+        m_userSelectedVersion = Version(stripVersionTagPrefix(userVersion));
+        m_userSelectedTag = userVersion;
     }
     m_selectUI = parser.isSet("select-ui");
     m_allowDowngrade = parser.isSet("allow-downgrade");
@@ -473,17 +493,29 @@ void PrismUpdaterApp::run()
         if (!m_userSelectedVersion.isEmpty()) {
             bool found = false;
             for (const auto& rls : m_releases) {
-                if (rls.version == m_userSelectedVersion) {
+                // Match the tag exactly when one was given; fall back to the parsed version so a
+                // tag written "0.1.0" and a release stored from "v0.1.0" still line up.
+                if (rls.tag_name == m_userSelectedTag || rls.version == m_userSelectedVersion) {
                     found = true;
                     updateRelease = rls;
                     break;
                 }
             }
             if (!found) {
-                showFatalErrorMessage(
-                    "No release for version!",
-                    QString("Can not find a github release for specified version %1").arg(m_userSelectedVersion.toString()));
-                return;
+                // The caller asked for a specific tag. Rather than dead-ending on a string that
+                // did not match (a "v" prefix, a different tag style, a release the API has not
+                // listed yet), say what was wanted and install the newest instead. Refusing to
+                // update at all is the one outcome that is never useful.
+                qWarning() << "No release matched" << m_userSelectedTag << "- installing the newest instead";
+                if (!latest.isValid()) {
+                    showFatalErrorMessage(
+                        tr("No release for version!"),
+                        tr("Can not find a github release for specified version %1, and the newest "
+                           "release could not be determined either.")
+                            .arg(m_userSelectedTag));
+                    return;
+                }
+                updateRelease = latest;
             }
         } else if (m_selectUI) {
             updateRelease = selectRelease();
@@ -1187,22 +1219,6 @@ bool PrismUpdaterApp::loadPrismVersionFromExe(const QString& exePath)
     }
     m_prismGitCommit = lines.takeFirst().simplified();
     return true;
-}
-
-/// rief Strip a leading "v"/"V" release-tag prefix from a version string.
-///
-/// GitHub tags are usually written "v0.0.2"; the launcher reports "0.0.2". The tag has
-/// to lose the prefix before it is parsed as a Version, otherwise FlexVer sorts the
-/// text section "v" before the numeric "0" and the release compares as *older* than the
-/// build that produced it.
-static QString stripVersionTagPrefix(const QString& tag)
-{
-    auto trimmed = tag.trimmed();
-    if (trimmed.size() > 1 && (trimmed.at(0) == QLatin1Char('v') || trimmed.at(0) == QLatin1Char('V')) &&
-        trimmed.at(1).isDigit()) {
-        return trimmed.mid(1);
-    }
-    return trimmed;
 }
 
 void PrismUpdaterApp::loadReleaseList()
