@@ -107,6 +107,11 @@ class PrismUpdaterApp : public QApplication {
     QString m_prismExecutable;
     QUrl m_prismRepoUrl;
     Version m_userSelectedVersion;
+    /// \brief The exact tag passed with --install-version, e.g. "v0.1.0".
+    ///
+    /// Kept because "v0.1.0" and "0.1.0" parse to equal versions but only one is the tag GitHub
+    /// names, and the release has to be found by whichever was asked for.
+    QString m_userSelectedTag;
     bool m_checkOnly;
     bool m_forceUpdate;
     bool m_printOnly;
